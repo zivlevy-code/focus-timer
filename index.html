@@ -139,6 +139,9 @@ ul.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .add-extra { display: flex; flex-wrap: wrap; gap: 14px; margin: -6px 0 14px; }
 .add-extra select, .add-extra input, .sort select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-height: 38px; }
 .empty { color: var(--muted); padding: 18px 4px; }
+.transfer { padding: 4px 0 10px; }
+.transfer .row2 { display: flex; gap: 8px; flex-wrap: wrap; }
+.transfer textarea { width: 100%; margin-top: 8px; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; direction: ltr; resize: vertical; }
 
 .summary { margin-top: 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 8px; text-align: center; }
@@ -241,6 +244,15 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
       <label>דקות הפסקה <input type="number" id="breakMin" min="1" max="60" value="5"></label>
       <button class="btn ghost" id="clearDone">נקה משימות שהושלמו</button>
       <button class="btn ghost" id="clearAll">התחל יום חדש</button>
+    </div>
+    <div class="transfer">
+      <p class="note">העברה בין מכשירים: ייצאו קוד במכשיר אחד, והדביקו אותו בתיבה במכשיר השני.</p>
+      <div class="row2">
+        <button class="btn ghost" id="exportBtn">ייצוא קוד</button>
+        <button class="btn ghost" id="importBtn">ייבוא מקוד</button>
+      </div>
+      <textarea id="xferBox" rows="3" aria-label="קוד העברה" placeholder="הקוד יופיע כאן. כדי לייבא, הדביקו קוד כאן ולחצו על ייבוא מקוד."></textarea>
+      <p class="note" id="xferNote" aria-live="polite"></p>
     </div>
   </details>
 </main>
@@ -699,9 +711,64 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
     armEnd();
   }
 
+  /* ---------- device transfer ---------- */
+  function xferNote(m) { $('#xferNote').textContent = m || ''; }
+  function encodeState() {
+    var data = { v: 1, tasks: S.tasks, pomos: S.pomos, work: S.work, brk: S.brk, lunchMin: S.lunchMin || 45, sort: S.sort || 'manual', currentId: S.currentId };
+    return 'FT1:' + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  }
+  function exportCode() {
+    if (S.running && S.mode === 'work') tick();
+    var code = encodeState(), box = $('#xferBox');
+    box.value = code;
+    var ok = function () { xferNote('הקוד הועתק. הדביקו אותו בדף במכשיר השני.'); };
+    var fail = function () { box.focus(); box.select(); xferNote('סמנו והעתיקו את הקוד ידנית.'); };
+    try { navigator.clipboard.writeText(code).then(ok, fail); } catch (e) { fail(); }
+  }
+  function cleanTask(t) {
+    if (!t || typeof t.text !== 'string' || !t.text.trim()) return null;
+    return {
+      id: typeof t.id === 'string' && t.id ? t.id.slice(0, 40) : 't' + Math.random().toString(36).slice(2, 9),
+      text: t.text.slice(0, 120), done: !!t.done, ms: Math.max(0, +t.ms || 0),
+      pri: t.pri === 0 || t.pri === 2 ? t.pri : 1,
+      due: typeof t.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.due) ? t.due : ''
+    };
+  }
+  var importArmed = false, importTimer = 0;
+  function importCode() {
+    var raw = $('#xferBox').value.trim();
+    if (!raw) { xferNote('הדביקו קוד בתיבה קודם.'); return; }
+    var data;
+    try {
+      if (raw.indexOf('FT1:') !== 0) throw 0;
+      data = JSON.parse(decodeURIComponent(escape(atob(raw.slice(4)))));
+      if (!data || !Array.isArray(data.tasks)) throw 0;
+    } catch (e) { importArmed = false; xferNote('הקוד לא תקין. בדקו שהעתקתם אותו במלואו.'); return; }
+    if (!importArmed) {
+      importArmed = true; xferNote('זה יחליף את המשימות והנתונים במכשיר הזה. לחצו שוב לאישור.');
+      clearTimeout(importTimer); importTimer = setTimeout(function () { importArmed = false; xferNote(''); }, 6000);
+      return;
+    }
+    clearTimeout(importTimer); importArmed = false;
+    S.tasks = data.tasks.map(cleanTask).filter(Boolean);
+    S.pomos = Math.max(0, +data.pomos || 0);
+    S.work = Math.min(120, Math.max(1, +data.work || 25));
+    S.brk = Math.min(60, Math.max(1, +data.brk || 5));
+    S.lunchMin = Math.min(240, Math.max(1, +data.lunchMin || 45));
+    S.sort = ['manual', 'priority', 'due'].indexOf(data.sort) > -1 ? data.sort : 'manual';
+    S.currentId = typeof data.currentId === 'string' ? data.currentId : null;
+    S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000;
+    ensureCurrent();
+    $('#workMin').value = S.work; $('#breakMin').value = S.brk; $('#lunchCustom').value = S.lunchMin; $('#sortBy').value = S.sort;
+    $('#xferBox').value = '';
+    save(); paintAll(); xferNote('הנתונים יובאו.');
+  }
+
   /* ---------- wiring ---------- */
   $('#finishBtn').onclick = finishTask;
   $('#resetBtn').onclick = resetTimer;
+  $('#exportBtn').onclick = exportCode;
+  $('#importBtn').onclick = importCode;
   $('#lunchBtn').onclick = function () { var p = $('#lunchPanel'); p.hidden = !p.hidden; };
   document.querySelectorAll('[data-lunch]').forEach(function (b) { b.onclick = function () { startLunch(b.getAttribute('data-lunch')); }; });
   $('#lunchGo').onclick = function () { startLunch($('#lunchCustom').value); };
