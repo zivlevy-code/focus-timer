@@ -742,7 +742,7 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
       return;
     }
     clearTimeout(armTimer); armed = false; b.textContent = 'התחל יום חדש';
-    S.tasks = S.tasks.filter(function (t) { return !t.done; }); S.tasks.forEach(function (t) { t.ms = 0; }); S.currentId = null; ensureCurrent(); S.pomos = 0; S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000;
+    S.tasks = S.tasks.filter(function (t) { return !t.done; }); S.currentId = null; ensureCurrent(); S.pomos = 0; S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000;
     save(); paintAll();
   };
 
