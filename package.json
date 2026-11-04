@@ -19,7 +19,7 @@
     "appId": "app.focustimer.desktop",
     "productName": "Focus Timer",
     "directories": { "output": "release" },
-    "files": ["main.js", "preload.js", "build/icon.png", "app/**/*"],
+    "files": ["main.js", "preload.js", "tasksmd.js", "build/icon.png", "app/**/*"],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "build/icon.png"
