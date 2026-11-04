@@ -83,6 +83,8 @@ contextBridge.exposeInMainWorld('focusApp', {
   dataFile: file,
   setFloat: (on) => ipcRenderer.invoke('float:set', !!on),
   setStatus: (st) => ipcRenderer.send('status:set', st),
+  burstConfetti: (big) => ipcRenderer.send('confetti:burst', !!big),
+  shortcuts: () => ipcRenderer.sendSync('shortcuts:status'),
   onPresence: (cb) => ipcRenderer.on('presence', (e, d) => cb(d)),
   onHotkey: (cb) => ipcRenderer.on('hotkey', (e, name) => cb(name)),
   readTasks,
