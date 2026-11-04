@@ -150,6 +150,12 @@ ul.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .hist-row { display: flex; gap: 10px; align-items: baseline; padding: 4px 2px; border-bottom: 1px solid var(--line); font-size: 15px; color: var(--ink); }
 .hist-row .when, .hist-row .dur { color: var(--muted); font-variant-numeric: tabular-nums; direction: ltr; flex: none; }
 .hist-row .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+kbd { font: inherit; font-size: 13px; background: var(--soft); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
+table.keys { border-collapse: collapse; width: 100%; margin: 6px 0 4px; font-size: 15px; color: var(--ink); }
+table.keys td { padding: 7px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.keys td:first-child { white-space: nowrap; direction: ltr; text-align: right; width: 1%; padding-inline-end: 14px; }
+.keys .warn { color: var(--danger); display: block; font-size: 13px; }
+.keys code { background: var(--soft); border-radius: 5px; padding: 0 5px; direction: ltr; unicode-bidi: isolate; display: inline-block; }
 
 .summary { margin-top: 28px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 8px; text-align: center; }
@@ -258,6 +264,21 @@ body.compact main { padding: 10px; }
   <details id="histBox">
     <summary>היסטוריה</summary>
     <div id="histList"></div>
+  </details>
+
+  <details id="keysBox">
+    <summary>קיצורים</summary>
+    <table class="keys"><tbody>
+      <tr class="app-only" style="display:none"><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd></td><td>התחל, השהה או המשך, מכל מקום בווינדוס. בזמן הפסקה: מסיים אותה ומתחיל סבב עבודה.<span class="warn" id="warnFocus" style="display:none">הקיצור הזה לא פעיל. כנראה שתוכנה אחרת תפסה את המקשים.</span></td></tr>
+      <tr class="app-only" style="display:none"><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd></td><td>הצג את החלון, או מזער אותו אם הוא כבר בחזית.<span class="warn" id="warnShow" style="display:none">הקיצור הזה לא פעיל. כנראה שתוכנה אחרת תפסה את המקשים.</span></td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>בשדה המשימה החדשה: מוסיף את המשימה להיום.</td></tr>
+      <tr><td><kbd>Enter</kbd> / <kbd>Esc</kbd></td><td>בעריכת תגיות: שמירה או ביטול.</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>בשדה הפסקת הצהריים: יוצא להפסקה.</td></tr>
+      <tr><td><code>#תגית</code></td><td>בתוך שם של משימה חדשה: מוסיף לה תגית.</td></tr>
+      <tr class="app-only" style="display:none"><td><code>!high</code> <code>!low</code> <code>@2026-11-10</code></td><td>בקובץ המשימות: דחיפות ותאריך הגשה. הכותרת <code>## Backlog</code> פותחת את הגב־לוג.</td></tr>
+      <tr class="app-only" style="display:none"><td>סמל העגבנייה</td><td>לחיצה ימנית באזור ההודעות: הצג או הסתר, התחל או השהה, יציאה.</td></tr>
+    </tbody></table>
+    <p class="note" id="keysWebNote">קיצורי מקלדת כלליים, קובץ המשימות ותפריט הסמל זמינים באפליקציה לווינדוס.</p>
   </details>
 
   <details>
@@ -491,6 +512,8 @@ body.compact main { padding: 10px; }
   }
   addEventListener('resize', sizeCanvas); sizeCanvas();
   function confetti(big) {
+    // In the desktop app the confetti covers the whole screen, not just this window.
+    if (window.focusApp && window.focusApp.burstConfetti) { window.focusApp.burstConfetti(!!big); return; }
     var n = (big ? 160 : 90) * (reduce ? 0.3 : 1);
     var w = innerWidth;
     for (var i = 0; i < n; i++) {
@@ -1137,6 +1160,13 @@ body.compact main { padding: 10px; }
     $('#idleMin').value = S.idleMin == null ? 3 : S.idleMin;
     window.focusApp.onPresence(onPresence);
     $('#fileTools').style.display = '';
+    Array.prototype.forEach.call(document.querySelectorAll('.app-only'), function (r) { r.style.display = ''; });
+    $('#keysWebNote').style.display = 'none';
+    if (window.focusApp.shortcuts) {
+      var sc = window.focusApp.shortcuts();
+      $('#warnShow').style.display = sc.show ? 'none' : '';
+      $('#warnFocus').style.display = sc.focus ? 'none' : '';
+    }
     if (window.focusApp.readTasks) {
       var ft = window.focusApp.readTasks();
       if (ft) applyFileTasks(ft); else syncFile();
