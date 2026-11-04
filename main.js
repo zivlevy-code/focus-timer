@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, session, shell } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, screen, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -14,6 +14,7 @@ let quitting = false;
 let floating = false;
 let normalBounds = null;
 let status = { mode: 'idle', running: false, remaining: 0, total: 0, lunch: false, task: '' };
+const shortcutState = { show: false, focus: false }; // false when another program already owns the keys
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -52,6 +53,52 @@ function applyStatus() {
   }
 }
 
+// Confetti is drawn in transparent, click-through windows that cover every screen,
+// so it falls over whatever you are doing and not only inside the app.
+let confettiWins = [];
+let confettiTimer = null;
+
+function closeConfetti() {
+  clearTimeout(confettiTimer);
+  confettiTimer = null;
+  confettiWins.forEach((c) => { if (!c.win.isDestroyed()) c.win.destroy(); });
+  confettiWins = [];
+}
+
+function burstConfetti(big) {
+  if (!confettiWins.length) {
+    confettiWins = screen.getAllDisplays().map((d) => {
+      const w = new BrowserWindow({
+        x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
+        transparent: true, frame: false, show: false, resizable: false, movable: false,
+        focusable: false, skipTaskbar: true, hasShadow: false, fullscreenable: false,
+        webPreferences: {
+          preload: path.join(__dirname, 'confetti-preload.js'),
+          contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false
+        }
+      });
+      const entry = { win: w, ready: false, pending: [] };
+      w.setIgnoreMouseEvents(true);
+      w.setAlwaysOnTop(true, 'screen-saver');
+      w.loadFile(path.join(__dirname, 'confetti.html'));
+      w.webContents.once('did-finish-load', () => {
+        if (w.isDestroyed()) return;
+        entry.ready = true;
+        w.showInactive();
+        entry.pending.forEach((b) => w.webContents.send('burst', b));
+        entry.pending = [];
+      });
+      return entry;
+    });
+  }
+  confettiWins.forEach((c) => {
+    if (c.win.isDestroyed()) return;
+    if (c.ready) c.win.webContents.send('burst', !!big); else c.pending.push(!!big);
+  });
+  clearTimeout(confettiTimer);
+  confettiTimer = setTimeout(closeConfetti, 8000);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 520,
@@ -79,7 +126,7 @@ function createWindow() {
   win.on('close', (e) => {
     if (!quitting && tray && status.running) { e.preventDefault(); win.hide(); }
   });
-  win.on('closed', () => { win = null; });
+  win.on('closed', () => { win = null; closeConfetti(); });
 }
 
 function createTray() {
@@ -114,6 +161,9 @@ ipcMain.handle('shell:openTasks', async () => {
 });
 ipcMain.handle('shell:openData', async () => shell.openPath(app.getPath('userData')));
 
+ipcMain.on('confetti:burst', (e, big) => burstConfetti(!!big));
+ipcMain.on('shortcuts:status', (e) => { e.returnValue = shortcutState; });
+
 ipcMain.on('status:set', (e, st) => {
   if (st && typeof st === 'object') { status = st; applyStatus(); }
 });
@@ -144,8 +194,8 @@ if (!app.requestSingleInstanceLock()) {
     });
     createWindow();
     createTray();
-    try { globalShortcut.register(SHORTCUT_SHOW, toggleWindow); } catch (e) {}
-    try { globalShortcut.register(SHORTCUT_FOCUS, () => send('hotkey', 'toggle')); } catch (e) {}
+    try { shortcutState.show = globalShortcut.register(SHORTCUT_SHOW, toggleWindow); } catch (e) {}
+    try { shortcutState.focus = globalShortcut.register(SHORTCUT_FOCUS, () => send('hotkey', 'toggle')); } catch (e) {}
 
     // Tell the page when you leave and come back. Timestamps are taken here, at the
     // moment of the event, so a page that was frozen by sleep can still credit it correctly.
