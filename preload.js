@@ -84,6 +84,7 @@ contextBridge.exposeInMainWorld('focusApp', {
   setFloat: (on) => ipcRenderer.invoke('float:set', !!on),
   setStatus: (st) => ipcRenderer.send('status:set', st),
   burstConfetti: (big) => ipcRenderer.send('confetti:burst', !!big),
+  setRain: (mode) => ipcRenderer.send('rain:set', mode),
   shortcuts: () => ipcRenderer.sendSync('shortcuts:status'),
   onPresence: (cb) => ipcRenderer.on('presence', (e, d) => cb(d)),
   onHotkey: (cb) => ipcRenderer.on('hotkey', (e, name) => cb(name)),
