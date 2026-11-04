@@ -271,6 +271,8 @@ body.compact main { padding: 10px; }
     <table class="keys"><tbody>
       <tr class="app-only" style="display:none"><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd></td><td>התחל, השהה או המשך, מכל מקום בווינדוס. בזמן הפסקה: מסיים אותה ומתחיל סבב עבודה.<span class="warn" id="warnFocus" style="display:none">הקיצור הזה לא פעיל. כנראה שתוכנה אחרת תפסה את המקשים.</span></td></tr>
       <tr class="app-only" style="display:none"><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>P</kbd></td><td>הצג את החלון, או מזער אותו אם הוא כבר בחזית.<span class="warn" id="warnShow" style="display:none">הקיצור הזה לא פעיל. כנראה שתוכנה אחרת תפסה את המקשים.</span></td></tr>
+      <tr class="app-only" style="display:none"><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>C</kbd></td><td>קונפטי על כל המסך.<span class="warn" id="warnConfetti" style="display:none">הקיצור הזה לא פעיל. כנראה שתוכנה אחרת תפסה את המקשים.</span></td></tr>
+      <tr class="app-only" style="display:none"><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>T</kbd></td><td>זורק עגבנייה למרכז המסך, והיא נמעכת.<span class="warn" id="warnTomato" style="display:none">הקיצור הזה לא פעיל. כנראה שתוכנה אחרת תפסה את המקשים.</span></td></tr>
       <tr><td><kbd>Enter</kbd></td><td>בשדה המשימה החדשה: מוסיף את המשימה להיום.</td></tr>
       <tr><td><kbd>Enter</kbd> / <kbd>Esc</kbd></td><td>בעריכת תגיות: שמירה או ביטול.</td></tr>
       <tr><td><kbd>Enter</kbd></td><td>בשדה הפסקת הצהריים: יוצא להפסקה.</td></tr>
@@ -577,6 +579,11 @@ body.compact main { padding: 10px; }
   /* ---------- tomato rain ---------- */
   var toms = [];
   function tomatoRain() {
+    // Desktop app: the rain falls over the whole screen (see syncRain); lunch gets a short burst.
+    if (window.focusApp && window.focusApp.setRain) {
+      if (S.lunch) { lastRain = 'brief'; window.focusApp.setRain('brief'); }
+      return;
+    }
     var n = reduce ? 8 : 30, w = innerWidth;
     for (var i = 0; i < n; i++) {
       toms.push({ x: Math.random() * w, y: -40 - Math.random() * innerHeight * 0.9, vy: 1.6 + Math.random() * 2,
@@ -935,6 +942,7 @@ body.compact main { padding: 10px; }
     }
     paintTimer(); paintList(); paintSummary(); paintHistory();
     armEnd();
+    syncRain();
   }
 
   /* ---------- floating window ---------- */
@@ -980,7 +988,18 @@ body.compact main { padding: 10px; }
   }
 
   /* ---------- desktop app: away detection, hotkey, status ---------- */
-  var screenAway = false, lastStatusAt = 0;
+  var screenAway = false, lastStatusAt = 0, lastRain = 'off';
+  // Tomato rain over the whole screen for as long as a break is running.
+  function syncRain() {
+    if (!window.focusApp || !window.focusApp.setRain) return;
+    var want;
+    if (S.mode !== 'break' || !S.running) want = 'off';
+    else if (S.lunch) return; // lunch: only the short burst fired when it started
+    else want = 'on';
+    if (want === lastRain) return;
+    lastRain = want;
+    window.focusApp.setRain(want);
+  }
   function pushStatus(force) {
     if (!window.focusApp || !window.focusApp.setStatus) return;
     var now = Date.now();
@@ -1166,6 +1185,8 @@ body.compact main { padding: 10px; }
       var sc = window.focusApp.shortcuts();
       $('#warnShow').style.display = sc.show ? 'none' : '';
       $('#warnFocus').style.display = sc.focus ? 'none' : '';
+      $('#warnConfetti').style.display = sc.confetti ? 'none' : '';
+      $('#warnTomato').style.display = sc.tomato ? 'none' : '';
     }
     if (window.focusApp.readTasks) {
       var ft = window.focusApp.readTasks();
