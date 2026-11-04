@@ -5,6 +5,8 @@ const fs = require('fs');
 // Global shortcuts (work from anywhere in Windows).
 const SHORTCUT_SHOW = 'CommandOrControl+Alt+P';  // show / minimize the window
 const SHORTCUT_FOCUS = 'CommandOrControl+Alt+S'; // start / pause / resume focus, or end a break
+const SHORTCUT_CONFETTI = 'CommandOrControl+Alt+C'; // confetti across the whole screen
+const SHORTCUT_TOMATO = 'CommandOrControl+Alt+T';   // throw one tomato at the middle of the screen
 
 const ICON = path.join(__dirname, 'build', 'icon.png');
 
@@ -14,7 +16,7 @@ let quitting = false;
 let floating = false;
 let normalBounds = null;
 let status = { mode: 'idle', running: false, remaining: 0, total: 0, lunch: false, task: '' };
-const shortcutState = { show: false, focus: false }; // false when another program already owns the keys
+const shortcutState = { show: false, focus: false, confetti: false, tomato: false }; // false when another program already owns the keys
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -53,50 +55,91 @@ function applyStatus() {
   }
 }
 
-// Confetti is drawn in transparent, click-through windows that cover every screen,
-// so it falls over whatever you are doing and not only inside the app.
-let confettiWins = [];
-let confettiTimer = null;
+// Screen effects (confetti, tomato rain, the thrown tomato) are drawn in transparent,
+// click-through windows that cover every screen, so they appear over whatever you are
+// doing and not only inside the app.
+let overlays = [];       // { win, displayId, ready, queue }
+let overlayTimer = null;
+let rainOn = false;
+let rainBriefTimer = null;
 
-function closeConfetti() {
-  clearTimeout(confettiTimer);
-  confettiTimer = null;
-  confettiWins.forEach((c) => { if (!c.win.isDestroyed()) c.win.destroy(); });
-  confettiWins = [];
+function closeOverlays() {
+  clearTimeout(overlayTimer);
+  overlayTimer = null;
+  rainOn = false;
+  overlays.forEach((o) => { if (!o.win.isDestroyed()) o.win.destroy(); });
+  overlays = [];
+}
+
+function ensureOverlays() {
+  if (overlays.length) return;
+  overlays = screen.getAllDisplays().map((d) => {
+    const w = new BrowserWindow({
+      x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
+      transparent: true, frame: false, show: false, resizable: false, movable: false,
+      focusable: false, skipTaskbar: true, hasShadow: false, fullscreenable: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'confetti-preload.js'),
+        contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false,
+        autoplayPolicy: 'no-user-gesture-required'
+      }
+    });
+    const entry = { win: w, displayId: d.id, ready: false, queue: [] };
+    w.setIgnoreMouseEvents(true);
+    w.setAlwaysOnTop(true, 'screen-saver');
+    w.loadFile(path.join(__dirname, 'confetti.html'));
+    w.webContents.once('did-finish-load', () => {
+      if (w.isDestroyed()) return;
+      entry.ready = true;
+      w.showInactive();
+      entry.queue.forEach(([ch, payload]) => w.webContents.send(ch, payload));
+      entry.queue = [];
+    });
+    return entry;
+  });
+}
+
+function toOverlays(channel, payload, onlyDisplayId) {
+  overlays.forEach((o) => {
+    if (o.win.isDestroyed()) return;
+    if (onlyDisplayId != null && o.displayId !== onlyDisplayId) return;
+    if (o.ready) o.win.webContents.send(channel, payload); else o.queue.push([channel, payload]);
+  });
+}
+
+// Close the windows a while after the last effect, unless tomato rain is still going.
+function holdOverlays(ms) {
+  clearTimeout(overlayTimer);
+  if (!rainOn) overlayTimer = setTimeout(closeOverlays, ms);
 }
 
 function burstConfetti(big) {
-  if (!confettiWins.length) {
-    confettiWins = screen.getAllDisplays().map((d) => {
-      const w = new BrowserWindow({
-        x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
-        transparent: true, frame: false, show: false, resizable: false, movable: false,
-        focusable: false, skipTaskbar: true, hasShadow: false, fullscreenable: false,
-        webPreferences: {
-          preload: path.join(__dirname, 'confetti-preload.js'),
-          contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false
-        }
-      });
-      const entry = { win: w, ready: false, pending: [] };
-      w.setIgnoreMouseEvents(true);
-      w.setAlwaysOnTop(true, 'screen-saver');
-      w.loadFile(path.join(__dirname, 'confetti.html'));
-      w.webContents.once('did-finish-load', () => {
-        if (w.isDestroyed()) return;
-        entry.ready = true;
-        w.showInactive();
-        entry.pending.forEach((b) => w.webContents.send('burst', b));
-        entry.pending = [];
-      });
-      return entry;
-    });
+  ensureOverlays();
+  toOverlays('burst', !!big);
+  holdOverlays(8000);
+}
+
+function throwTomato() {
+  ensureOverlays();
+  const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  toOverlays('splat', null, d.id); // on the screen where the pointer is
+  holdOverlays(9000);
+}
+
+// mode: 'on' (until 'off'), 'brief' (about ten seconds) or 'off'
+function setRain(mode) {
+  clearTimeout(rainBriefTimer);
+  if (mode === 'on' || mode === 'brief') {
+    ensureOverlays();
+    rainOn = true;
+    clearTimeout(overlayTimer);
+    toOverlays('rain', true);
+    if (mode === 'brief') rainBriefTimer = setTimeout(() => setRain('off'), 10000);
+  } else if (rainOn) {
+    rainOn = false;
+    toOverlays('rain', false);
+    holdOverlays(13000);
   }
-  confettiWins.forEach((c) => {
-    if (c.win.isDestroyed()) return;
-    if (c.ready) c.win.webContents.send('burst', !!big); else c.pending.push(!!big);
-  });
-  clearTimeout(confettiTimer);
-  confettiTimer = setTimeout(closeConfetti, 8000);
 }
 
 function createWindow() {
@@ -126,7 +169,7 @@ function createWindow() {
   win.on('close', (e) => {
     if (!quitting && tray && status.running) { e.preventDefault(); win.hide(); }
   });
-  win.on('closed', () => { win = null; closeConfetti(); });
+  win.on('closed', () => { win = null; closeOverlays(); });
 }
 
 function createTray() {
@@ -138,6 +181,8 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Show / hide', click: () => { if (win && win.isVisible() && !win.isMinimized()) win.hide(); else showWindow(); } },
     { label: 'Start / pause', click: () => send('hotkey', 'toggle') },
+    { label: 'Confetti', click: () => burstConfetti(true) },
+    { label: 'Throw a tomato', click: throwTomato },
     { type: 'separator' },
     { label: 'Quit', click: () => { quitting = true; app.quit(); } }
   ]));
@@ -162,6 +207,7 @@ ipcMain.handle('shell:openTasks', async () => {
 ipcMain.handle('shell:openData', async () => shell.openPath(app.getPath('userData')));
 
 ipcMain.on('confetti:burst', (e, big) => burstConfetti(!!big));
+ipcMain.on('rain:set', (e, mode) => setRain(mode));
 ipcMain.on('shortcuts:status', (e) => { e.returnValue = shortcutState; });
 
 ipcMain.on('status:set', (e, st) => {
@@ -196,6 +242,8 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     try { shortcutState.show = globalShortcut.register(SHORTCUT_SHOW, toggleWindow); } catch (e) {}
     try { shortcutState.focus = globalShortcut.register(SHORTCUT_FOCUS, () => send('hotkey', 'toggle')); } catch (e) {}
+    try { shortcutState.confetti = globalShortcut.register(SHORTCUT_CONFETTI, () => burstConfetti(true)); } catch (e) {}
+    try { shortcutState.tomato = globalShortcut.register(SHORTCUT_TOMATO, throwTomato); } catch (e) {}
 
     // Tell the page when you leave and come back. Timestamps are taken here, at the
     // moment of the event, so a page that was frozen by sleep can still credit it correctly.
@@ -213,3 +261,5 @@ if (!app.requestSingleInstanceLock()) {
   app.on('will-quit', () => globalShortcut.unregisterAll());
   app.on('window-all-closed', () => app.quit());
 }
+
+module.exports = { burstConfetti, setRain, throwTomato }; // used by the tests
