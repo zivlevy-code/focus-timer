@@ -1,5 +1,6 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, session } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, session, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 // Global shortcuts (work from anywhere in Windows).
 const SHORTCUT_SHOW = 'CommandOrControl+Alt+P';  // show / minimize the window
@@ -98,6 +99,20 @@ function createTray() {
 ipcMain.on('data:path', (e) => {
   e.returnValue = path.join(app.getPath('userData'), 'focus-timer-data.json');
 });
+
+// The tasks file lives in Documents/Focus Timer so it is easy to find and edit.
+function tasksFilePath() {
+  const dir = path.join(app.getPath('documents'), 'Focus Timer');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+  return path.join(dir, 'tasks.md');
+}
+ipcMain.on('tasks:path', (e) => { e.returnValue = tasksFilePath(); });
+ipcMain.handle('shell:openTasks', async () => {
+  const p = tasksFilePath();
+  try { if (!fs.existsSync(p)) fs.writeFileSync(p, ''); } catch (e) {}
+  return shell.openPath(p);
+});
+ipcMain.handle('shell:openData', async () => shell.openPath(app.getPath('userData')));
 
 ipcMain.on('status:set', (e, st) => {
   if (st && typeof st === 'object') { status = st; applyStatus(); }
