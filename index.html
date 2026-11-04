@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>זמן עבודה</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='37' rx='25' ry='22' fill='%23E5402B'/%3E%3Cpath d='M32 16 L35.5 22.5 L43 20 L38.5 26 L45 29.5 L36.5 29 L32 34 L27.5 29 L19 29.5 L25.5 26 L21 20 L28.5 22.5 Z' fill='%233E8E41'/%3E%3Crect x='30.4' y='8' width='3.2' height='9' rx='1.6' fill='%232D6B30'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Secular+One&display=swap" rel="stylesheet">
@@ -176,6 +177,7 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
       <button class="btn ghost" id="skipBtn" hidden>דלג על ההפסקה</button>
       <button class="btn ghost" id="lunchBtn">הפסקת צהריים</button>
       <button class="btn ghost" id="wakeBtn" aria-pressed="false">השאר מסך דלוק</button>
+      <button class="btn ghost" id="floatBtn" hidden>צף מעל החלונות</button>
       <button class="btn ghost" id="resetBtn">אפס טיימר</button>
     </div>
     <p class="note" id="wakeNote" aria-live="polite"></p>
@@ -249,7 +251,7 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
 <script>
 (function () {
   var KEY = 'focus-timer-v1';
-  var $ = function (s) { return document.querySelector(s); };
+  var $ = function (s) { return document.querySelector(s) || (pipWin && pipWin.document.querySelector(s)); };
   var S = { tasks: [], currentId: null, mode: 'idle', running: false, remaining: 25 * 60000, lastTick: 0, pomos: 0, work: 25, brk: 5, choosing: false };
 
   function load() {
@@ -672,7 +674,9 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
     });
   }
   function paintAll() {
-    document.body.classList.toggle('is-break', S.mode === 'break');
+    var isB = S.mode === 'break';
+    document.body.classList.toggle('is-break', isB);
+    if (pipWin) pipWin.document.body.classList.toggle('is-break', isB);
     var label = S.mode === 'work' ? (S.running ? 'זמן עבודה' : 'בהשהיה') : S.mode === 'break' ? (S.lunch ? 'הפסקת צהריים' : 'הפסקה') : 'מוכנים להתחיל';
     $('#mode').textContent = label;
     $('#hero').hidden = S.mode !== 'break';
@@ -699,9 +703,44 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
     armEnd();
   }
 
+  /* ---------- floating window ---------- */
+  var pipWin = null;
+  function paintFloatBtn() {
+    var b = $('#floatBtn');
+    if (b) b.textContent = pipWin ? 'החזר לדף' : 'צף מעל החלונות';
+  }
+  function dockTimer() {
+    var w = pipWin; pipWin = null;
+    var t = w && w.document.querySelector('.timer');
+    if (t) document.querySelector('main').insertBefore(t, document.querySelector('section.tasks'));
+    paintFloatBtn();
+  }
+  function toggleFloat() {
+    if (pipWin) { pipWin.close(); return; }
+    if (!('documentPictureInPicture' in window)) return;
+    var timer = document.querySelector('.timer');
+    documentPictureInPicture.requestWindow({ width: 400, height: 500 }).then(function (w) {
+      pipWin = w;
+      w.document.documentElement.lang = 'he'; w.document.documentElement.dir = 'rtl';
+      Array.from(document.styleSheets).forEach(function (sheet) {
+        try {
+          var st = w.document.createElement('style');
+          st.textContent = Array.from(sheet.cssRules).map(function (r) { return r.cssText; }).join('\n');
+          w.document.head.appendChild(st);
+        } catch (e) {
+          if (sheet.href) { var l = w.document.createElement('link'); l.rel = 'stylesheet'; l.href = sheet.href; w.document.head.appendChild(l); }
+        }
+      });
+      var m = w.document.createElement('main'); m.appendChild(timer); w.document.body.appendChild(m);
+      w.addEventListener('pagehide', dockTimer);
+      paintFloatBtn(); paintAll();
+    }).catch(function () {});
+  }
+
   /* ---------- wiring ---------- */
   $('#finishBtn').onclick = finishTask;
   $('#resetBtn').onclick = resetTimer;
+  $('#floatBtn').onclick = toggleFloat;
   $('#lunchBtn').onclick = function () { var p = $('#lunchPanel'); p.hidden = !p.hidden; };
   document.querySelectorAll('[data-lunch]').forEach(function (b) { b.onclick = function () { startLunch(b.getAttribute('data-lunch')); }; });
   $('#lunchGo').onclick = function () { startLunch($('#lunchCustom').value); };
@@ -760,6 +799,8 @@ canvas#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
   if (S.wake) { wakeOn = true; acquireWake(); }
   paintWake();
   paintAll();
+  $('#floatBtn').hidden = !('documentPictureInPicture' in window);
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
   try {
     var blob = new Blob(['setInterval(function(){postMessage(1)},500)'], { type: 'text/javascript' });
     var hb = new Worker(URL.createObjectURL(blob));
