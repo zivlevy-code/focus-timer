@@ -1,0 +1,150 @@
+const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, session } = require('electron');
+const path = require('path');
+
+// Global shortcuts (work from anywhere in Windows).
+const SHORTCUT_SHOW = 'CommandOrControl+Alt+P';  // show / minimize the window
+const SHORTCUT_FOCUS = 'CommandOrControl+Alt+S'; // start / pause / resume focus, or end a break
+
+const ICON = path.join(__dirname, 'build', 'icon.png');
+
+let win = null;
+let tray = null;
+let quitting = false;
+let floating = false;
+let normalBounds = null;
+let status = { mode: 'idle', running: false, remaining: 0, total: 0, lunch: false, task: '' };
+
+function send(channel, payload) {
+  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+function showWindow() {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+function toggleWindow() {
+  if (!win) return;
+  if (win.isVisible() && !win.isMinimized() && win.isFocused()) win.minimize();
+  else showWindow();
+}
+
+function fmt(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+function applyStatus() {
+  if (win && !win.isDestroyed()) {
+    if (status.mode === 'idle' || !status.total) win.setProgressBar(-1);
+    else win.setProgressBar(Math.min(1, Math.max(0, 1 - status.remaining / status.total)), { mode: status.running ? 'normal' : 'paused' });
+  }
+  if (tray) {
+    let tip = 'Focus Timer';
+    if (status.mode !== 'idle') {
+      const label = status.mode === 'break' ? (status.lunch ? 'Lunch' : 'Break') : (status.running ? 'Focus' : 'Paused');
+      tip = label + ' ' + fmt(status.remaining) + (status.task && status.mode === 'work' ? ' - ' + status.task : '');
+    }
+    tray.setToolTip(tip.slice(0, 120));
+  }
+}
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 520,
+    height: 860,
+    minWidth: 300,
+    minHeight: 260,
+    title: 'Focus Timer',
+    icon: ICON,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0E1621' : '#EDF1F5',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false, // the preload script writes the data file
+      backgroundThrottling: false, // keep the timer exact while minimized or hidden
+      spellcheck: false
+    }
+  });
+  win.setMenuBarVisibility(false);
+  win.loadFile(path.join(__dirname, 'app', 'index.html'));
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  // Closing the window while a timer is running keeps it going in the tray.
+  win.on('close', (e) => {
+    if (!quitting && tray && status.running) { e.preventDefault(); win.hide(); }
+  });
+  win.on('closed', () => { win = null; });
+}
+
+function createTray() {
+  try {
+    tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
+  } catch (e) { tray = null; return; }
+  tray.setToolTip('Focus Timer');
+  tray.on('click', showWindow);
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Show / hide', click: () => { if (win && win.isVisible() && !win.isMinimized()) win.hide(); else showWindow(); } },
+    { label: 'Start / pause', click: () => send('hotkey', 'toggle') },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { quitting = true; app.quit(); } }
+  ]));
+}
+
+ipcMain.on('data:path', (e) => {
+  e.returnValue = path.join(app.getPath('userData'), 'focus-timer-data.json');
+});
+
+ipcMain.on('status:set', (e, st) => {
+  if (st && typeof st === 'object') { status = st; applyStatus(); }
+});
+
+ipcMain.handle('float:set', (e, on) => {
+  if (!win) return false;
+  if (on && !floating) {
+    normalBounds = win.getBounds();
+    win.setContentSize(400, 500);
+    win.setAlwaysOnTop(true, 'floating');
+    floating = true;
+  } else if (!on && floating) {
+    win.setAlwaysOnTop(false);
+    if (normalBounds) win.setBounds(normalBounds);
+    floating = false;
+  }
+  return floating;
+});
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', showWindow);
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
+    session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
+      cb(permission === 'notifications' || permission === 'clipboard-sanitized-write');
+    });
+    createWindow();
+    createTray();
+    try { globalShortcut.register(SHORTCUT_SHOW, toggleWindow); } catch (e) {}
+    try { globalShortcut.register(SHORTCUT_FOCUS, () => send('hotkey', 'toggle')); } catch (e) {}
+
+    // Tell the page when you leave and come back. Timestamps are taken here, at the
+    // moment of the event, so a page that was frozen by sleep can still credit it correctly.
+    powerMonitor.on('lock-screen', () => send('presence', { type: 'lock', ts: Date.now() }));
+    powerMonitor.on('unlock-screen', () => send('presence', { type: 'unlock', ts: Date.now() }));
+    powerMonitor.on('suspend', () => send('presence', { type: 'suspend', ts: Date.now() }));
+    powerMonitor.on('resume', () => send('presence', { type: 'resume', ts: Date.now() }));
+    setInterval(() => {
+      try { send('presence', { type: 'idle', idleSec: powerMonitor.getSystemIdleTime() }); } catch (e) {}
+    }, 2000);
+
+    app.on('activate', () => { if (!win) createWindow(); });
+  });
+  app.on('before-quit', () => { quitting = true; });
+  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('window-all-closed', () => app.quit());
+}
