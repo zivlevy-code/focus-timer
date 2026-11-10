@@ -1,6 +1,6 @@
 {
   "name": "focus-timer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Pomodoro timer with a task list",
   "main": "main.js",
   "private": true,
@@ -18,10 +18,27 @@
   "build": {
     "appId": "app.focustimer.desktop",
     "productName": "Focus Timer",
-    "directories": { "output": "release" },
-    "files": ["main.js", "preload.js", "tasksmd.js", "confetti.html", "confetti-preload.js", "build/icon.png", "app/**/*"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "tasksmd.js",
+      "confetti.html",
+      "confetti-preload.js",
+      "build/icon.png",
+      "app/**/*"
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png"
     },
     "nsis": {

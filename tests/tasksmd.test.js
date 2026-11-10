@@ -95,4 +95,10 @@ ok('identical hand typed lines get different ids', () => {
   const t = parseMarkdown('- [ ] same\n- [ ] same\n');
   assert.strictEqual(t.length, 2); assert.notStrictEqual(t[0].id, t[1].id);
 });
+ok('reordering in the app reorders the file and keeps notes in place', () => {
+  const src = '# Tasks\n- [ ] one <!--t:r1-->\nA note\n- [ ] two <!--t:r2-->\n- [ ] three <!--t:r3-->\n';
+  const tasks = parseMarkdown(src);
+  const out = patchText(src, [tasks[2], tasks[0], tasks[1]]);
+  assert.strictEqual(out, '# Tasks\n- [ ] three <!--t:r3-->\nA note\n- [ ] one <!--t:r1-->\n- [ ] two <!--t:r2-->\n');
+});
 console.log(n + ' tests passed');

@@ -33,7 +33,16 @@ A personal Pomodoro timer with a task list. Hebrew, right-to-left. One page that
 if (window.focusApp && window.focusApp.something) { ... }
 ```
 
-App-only things: the tasks file, global shortcuts, away detection, full-screen effects, the always-on-top mini window (the website uses the browser's picture-in-picture instead), the file buttons in Settings. In the legend, app-only rows carry the class `app-only` and are hidden on the website.
+App-only things: the tasks file, global shortcuts (and changing them), start with Windows, saving the Excel export through a save dialog (the website downloads it instead), away detection, full-screen effects, the file buttons in Settings. The opposite way round, "float above windows" and "keep screen on" exist only on the website. In the legend, app-only rows carry the class `app-only` and are hidden on the website.
+
+## Languages
+
+The page is Hebrew (right-to-left) by default, with an English option in Settings (`S.lang`, saved with the rest of the state). Every piece of text needs both languages:
+
+- Text built in JS: `L('עברית', 'English')`.
+- Fixed text in the HTML: add the English to the `EN` dictionary, keyed by the exact Hebrew text (or attribute value). Elements filled in by code are listed in `DYNAMIC` and are never run through `EN`, so task names and tags are never translated.
+- The tray menu and tooltip in `main.js` follow `status.lang`.
+- "Backlog" is written in English in both languages (the owner prefers it to "גב־לוג").
 
 Do not add network requests. The app runs offline and its CSP blocks them. Do not put secrets anywhere: the repo is public and every file in the root is served on the website.
 
@@ -44,7 +53,9 @@ Do not add network requests. The app runs offline and its CSP blocks them. Do no
 - Tasks are also mirrored to `Documents\Focus Timer\tasks.md`. One checkbox per task:
   `- [ ] Title #tag !high @2026-11-10 <!--t:ID-->`. A heading containing "Backlog" starts the backlog. Everything that is not a checkbox line must be left untouched when the file is rewritten. Hand-typed lines without an id get a stable id derived from their text.
 - Time spent, history and counters are **not** in the markdown file. They are matched to tasks by id. Deleting a line deletes that task (finished ones go to history).
-- A task: `{ id, text, done, ms, pri (0,1,2), due, tags[], section ('today'|'backlog'), doneAt }`.
+- A task: `{ id, text, done, ms, pri (0,1,2), due, tags[], section ('today'|'backlog'), doneAt, note, est, pomos, repeat ('daily'|'weekdays'|'weekly'), repeatDay }`. `note`, `est` (estimated rounds), `pomos` (rounds done) and `repeat` live only in the data file, matched by id.
+- `log` in the state: per day (`YYYY-MM-DD`) `{ ms, rounds, tags: { lowercased tag or '': ms } }`, kept 400 days. Feeds the week table and the daily goal.
+- The order of tasks in the app is the order in `tasks.md` (drag to reorder rewrites the file order; headings and notes stay put).
 
 ## Behaviour to preserve
 
@@ -52,11 +63,14 @@ Do not add network requests. The app runs offline and its CSP blocks them. Do no
 - Away detection (app only): lock, sleep or 3 min idle pauses the round **as of when the user left** and gives that time back to the task. Manual pause is never auto-resumed. Away more than 30 min cancels the round.
 - Tomato rain over the whole screen runs for the whole of a normal or long break. Lunch gets only about 10 seconds.
 - Today's list drives the timer. The backlog is only used when today is empty.
+- Repeating tasks: when done and the day ends (or done tasks are cleared), a copy goes to history and the task comes back unticked with its next date as the due date, waiting in the backlog until that day. Week days are Sunday to Thursday.
+- "New day" first shows a summary of the day, then archives.
+- Delete shows a toast with undo for 7 seconds.
 - Tags: `#word` in a task name (letters only, so `#42` and `C#` are not tags). Case-insensitive, kept as first written.
 
-## Shortcuts (global, app only; fixed in `main.js`)
+## Shortcuts (global, app only)
 
-`Ctrl+Alt+S` start, pause, resume, or end a break. `Ctrl+Alt+P` show or minimize the window. `Ctrl+Alt+C` confetti on the whole screen. `Ctrl+Alt+T` throw one tomato at the middle of the screen. Settings has a legend that warns if another program already owns a key. Keep that legend in sync whenever a shortcut changes.
+Defaults in `DEFAULT_KEYS` in `main.js`: `Ctrl+Alt+S` start, pause, resume, or end a break. `Ctrl+Alt+P` show or minimize the window. `Ctrl+Alt+N` quick note (brings the window forward, saves a line to the backlog, then puts the window back). `Ctrl+Alt+C` confetti on the whole screen. `Ctrl+Alt+T` throw one tomato at the middle of the screen. The user can change each one from the shortcut legend ("שנה"); the choice is saved in `%APPDATA%\Focus Timer\shortcuts.json`. The legend is built from `KEY_INFO` in `index.html` and warns if another program owns a key. Keep `KEY_INFO` and `DEFAULT_KEYS` in sync.
 
 ## Run, test, build
 
@@ -73,10 +87,9 @@ npm run dist       # Windows installer into release/ (needs Windows, or use the 
 
 ## Not yet verified on a real Windows machine
 
-The tray icon and its menu, taskbar progress bar, system notifications, lock and sleep detection, the full-screen effect windows on real displays and several monitors, the squash sound, opening `tasks.md` in the default editor, and upgrading over an existing install. Check these first when working on a Windows machine, and tell me what you see.
+The tray icon and its menu (now in Hebrew), taskbar progress bar, system notifications, lock and sleep detection, the full-screen effect windows on real displays and several monitors, the squash sound, opening `tasks.md` in the default editor, upgrading over an existing install, start with Windows, the quick-note shortcut returning the window to where it was, and recording new shortcut keys. Check these first when working on a Windows machine, and tell me what you see.
 
 ## Known limits and ideas
 
-- Shortcuts are hard-coded (no settings screen for them yet).
 - Effects do not show over exclusive full-screen games or video.
-- Ideas not built: drag to reorder tasks, a task-count or time-of-day view of history, sync between devices (needs an online store such as Firebase or Supabase), choosing where `tasks.md` lives.
+- Ideas not built: subtasks with their own checkboxes (notes are free text for now), a time-of-day view of history, sync between devices (needs an online store such as Firebase or Supabase), choosing where `tasks.md` lives.

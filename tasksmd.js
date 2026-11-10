@@ -92,6 +92,7 @@ function patchText(text, tasks) {
   const out = [];
   const seen = new Set();
   const counters = {};
+  const slots = { today: [], backlog: [] }; // where kept task lines sit, filled in below
   let section = 'today';
   let lastToday = -1, lastBacklog = -1, backlogHead = -1;
   for (const line of lines) {
@@ -108,9 +109,16 @@ function patchText(text, tasks) {
     if (!t || seen.has(p.id)) continue;           // deleted in the app (or a duplicate line)
     if ((t.section || 'today') !== section) continue; // moved between halves: re-added below
     seen.add(p.id);
-    out.push(formatLine(t, p.prefix));
+    slots[section].push({ at: out.length, prefix: p.prefix });
+    out.push(null);
     if (section === 'today') lastToday = out.length - 1; else lastBacklog = out.length - 1;
   }
+  // Kept task lines follow the order of the tasks list (so reordering in the app shows
+  // in the file), while headings and notes stay where they were.
+  ['today', 'backlog'].forEach((sec) => {
+    const order = tasks.filter((t) => seen.has(t.id) && (t.section || 'today') === sec);
+    slots[sec].forEach((s, i) => { out[s.at] = formatLine(order[i], s.prefix); });
+  });
 
   const addToday = [], addBacklog = [];
   for (const t of tasks) {

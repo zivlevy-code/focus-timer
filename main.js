@@ -1,12 +1,16 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, screen, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, screen, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// Global shortcuts (work from anywhere in Windows).
-const SHORTCUT_SHOW = 'CommandOrControl+Alt+P';  // show / minimize the window
-const SHORTCUT_FOCUS = 'CommandOrControl+Alt+S'; // start / pause / resume focus, or end a break
-const SHORTCUT_CONFETTI = 'CommandOrControl+Alt+C'; // confetti across the whole screen
-const SHORTCUT_TOMATO = 'CommandOrControl+Alt+T';   // throw one tomato at the middle of the screen
+// Global shortcuts (work from anywhere in Windows). These are the defaults; the user can
+// change them in the app's shortcut legend, and the choice is kept in shortcuts.json.
+const DEFAULT_KEYS = {
+  focus: 'CommandOrControl+Alt+S',    // start / pause / resume focus, or end a break
+  show: 'CommandOrControl+Alt+P',     // show / minimize the window
+  confetti: 'CommandOrControl+Alt+C', // confetti across the whole screen
+  tomato: 'CommandOrControl+Alt+T',   // throw one tomato at the middle of the screen
+  note: 'CommandOrControl+Alt+N'      // quick note: jot a passing thought into the backlog
+};
 
 const ICON = path.join(__dirname, 'build', 'icon.png');
 
@@ -16,7 +20,9 @@ let quitting = false;
 let floating = false;
 let normalBounds = null;
 let status = { mode: 'idle', running: false, remaining: 0, total: 0, lunch: false, task: '' };
-const shortcutState = { show: false, focus: false, confetti: false, tomato: false }; // false when another program already owns the keys
+let keys = Object.assign({}, DEFAULT_KEYS);
+const shortcutState = { show: false, focus: false, confetti: false, tomato: false, note: false }; // false when another program already owns the keys
+let noteReturn = null; // how the window looked before a quick note brought it forward
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -48,11 +54,64 @@ function applyStatus() {
   if (tray) {
     let tip = 'Focus Timer';
     if (status.mode !== 'idle') {
-      const label = status.mode === 'break' ? (status.lunch ? 'Lunch' : 'Break') : (status.running ? 'Focus' : 'Paused');
-      tip = label + ' ' + fmt(status.remaining) + (status.task && status.mode === 'work' ? ' - ' + status.task : '');
+      const en = status.lang === 'en';
+      const label = status.mode === 'break'
+        ? (status.lunch ? (en ? 'Lunch' : 'הפסקת צהריים') : (en ? 'Break' : 'הפסקה'))
+        : (status.running ? (en ? 'Focus' : 'עבודה') : (en ? 'Paused' : 'בהשהיה'));
+      tip = label + ' ' + fmt(status.remaining) + (status.task && status.mode === 'work' ? ' · ' + status.task : '');
     }
     tray.setToolTip(tip.slice(0, 120));
   }
+}
+
+// ---- shortcuts ----
+function keysFile() { return path.join(app.getPath('userData'), 'shortcuts.json'); }
+function loadKeys() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(keysFile(), 'utf8'));
+    Object.keys(DEFAULT_KEYS).forEach((k) => { if (typeof saved[k] === 'string') keys[k] = saved[k]; });
+  } catch (e) {}
+}
+function saveKeys() {
+  try { fs.writeFileSync(keysFile(), JSON.stringify(keys, null, 2)); } catch (e) {}
+}
+
+// A quick note brings the window forward; once the note is saved it goes back the way it was.
+function quickNote() {
+  if (!win) return;
+  noteReturn = !win.isVisible() ? 'hide' : (win.isMinimized() || !win.isFocused()) ? 'minimize' : null;
+  showWindow();
+  send('hotkey', 'note');
+}
+const ACTIONS = {
+  focus: () => send('hotkey', 'toggle'),
+  show: toggleWindow,
+  confetti: () => burstConfetti(true),
+  tomato: () => throwTomato(),
+  note: quickNote
+};
+function registerKey(name, accel) {
+  if (!accel) return false;
+  try { return globalShortcut.register(accel, ACTIONS[name]); } catch (e) { return false; }
+}
+function registerAll() {
+  globalShortcut.unregisterAll();
+  Object.keys(DEFAULT_KEYS).forEach((k) => { shortcutState[k] = registerKey(k, keys[k]); });
+}
+// Change one shortcut. If the new keys cannot be taken, the old ones are kept.
+function setKey(name, accel) {
+  if (!DEFAULT_KEYS[name]) return { ok: false };
+  accel = accel || DEFAULT_KEYS[name];
+  const taken = Object.keys(keys).some((k) => k !== name && keys[k].toLowerCase() === accel.toLowerCase());
+  if (taken) return { ok: false, reason: 'dup' };
+  const old = keys[name];
+  try { if (shortcutState[name]) globalShortcut.unregister(old); } catch (e) {}
+  if (registerKey(name, accel)) {
+    keys[name] = accel; shortcutState[name] = true; saveKeys();
+    return { ok: true };
+  }
+  shortcutState[name] = registerKey(name, old);
+  return { ok: false, reason: 'busy' };
 }
 
 // Screen effects (confetti, tomato rain, the thrown tomato) are drawn in transparent,
@@ -178,13 +237,24 @@ function createTray() {
   } catch (e) { tray = null; return; }
   tray.setToolTip('Focus Timer');
   tray.on('click', showWindow);
+  buildTrayMenu();
+}
+
+// The tray menu follows the language chosen in the page.
+let menuLang = null;
+function buildTrayMenu() {
+  if (!tray) return;
+  const en = status.lang === 'en';
+  if (menuLang === (en ? 'en' : 'he')) return;
+  menuLang = en ? 'en' : 'he';
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Show / hide', click: () => { if (win && win.isVisible() && !win.isMinimized()) win.hide(); else showWindow(); } },
-    { label: 'Start / pause', click: () => send('hotkey', 'toggle') },
-    { label: 'Confetti', click: () => burstConfetti(true) },
-    { label: 'Throw a tomato', click: throwTomato },
+    { label: en ? 'Show / hide' : 'הצג / הסתר', click: () => { if (win && win.isVisible() && !win.isMinimized()) win.hide(); else showWindow(); } },
+    { label: en ? 'Start / pause' : 'התחל / השהה', click: () => send('hotkey', 'toggle') },
+    { label: en ? 'Quick note' : 'פתק מהיר', click: quickNote },
+    { label: en ? 'Confetti' : 'קונפטי', click: () => burstConfetti(true) },
+    { label: en ? 'Throw a tomato' : 'זרוק עגבנייה', click: throwTomato },
     { type: 'separator' },
-    { label: 'Quit', click: () => { quitting = true; app.quit(); } }
+    { label: en ? 'Quit' : 'יציאה', click: () => { quitting = true; app.quit(); } }
   ]));
 }
 
@@ -208,10 +278,44 @@ ipcMain.handle('shell:openData', async () => shell.openPath(app.getPath('userDat
 
 ipcMain.on('confetti:burst', (e, big) => burstConfetti(!!big));
 ipcMain.on('rain:set', (e, mode) => setRain(mode));
-ipcMain.on('shortcuts:status', (e) => { e.returnValue = shortcutState; });
+ipcMain.on('shortcuts:status', (e) => { e.returnValue = { ok: shortcutState, keys, defaults: DEFAULT_KEYS }; });
+ipcMain.handle('shortcuts:set', (e, name, accel) => setKey(String(name), accel ? String(accel) : ''));
+ipcMain.handle('shortcuts:reset', () => {
+  keys = Object.assign({}, DEFAULT_KEYS);
+  saveKeys();
+  registerAll();
+  return true;
+});
+// While the user records new keys, the current shortcuts must not fire.
+ipcMain.on('shortcuts:pause', (e, on) => {
+  if (on) globalShortcut.unregisterAll(); else registerAll();
+});
+ipcMain.on('note:done', () => {
+  if (win && noteReturn === 'minimize') win.minimize();
+  else if (win && noteReturn === 'hide') win.hide();
+  noteReturn = null;
+});
+
+ipcMain.handle('autostart:get', () => app.getLoginItemSettings().openAtLogin);
+ipcMain.handle('autostart:set', (e, on) => {
+  app.setLoginItemSettings({ openAtLogin: !!on });
+  return app.getLoginItemSettings().openAtLogin;
+});
+
+// Save a CSV (opens in Excel). The user picks where; the default is Documents\Focus Timer.
+ipcMain.handle('file:saveCsv', async (e, name, text) => {
+  const dir = path.join(app.getPath('documents'), 'Focus Timer');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (err) {}
+  const safe = String(name || 'focus-timer.csv').replace(/[\\/:*?"<>|]/g, '_');
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(dir, safe), filters: [{ name: 'Excel (CSV)', extensions: ['csv'] }] });
+  if (r.canceled || !r.filePath) return null;
+  fs.writeFileSync(r.filePath, '﻿' + String(text || ''), 'utf8');
+  shell.showItemInFolder(r.filePath);
+  return r.filePath;
+});
 
 ipcMain.on('status:set', (e, st) => {
-  if (st && typeof st === 'object') { status = st; applyStatus(); }
+  if (st && typeof st === 'object') { status = st; applyStatus(); buildTrayMenu(); }
 });
 
 ipcMain.handle('float:set', (e, on) => {
@@ -240,10 +344,8 @@ if (!app.requestSingleInstanceLock()) {
     });
     createWindow();
     createTray();
-    try { shortcutState.show = globalShortcut.register(SHORTCUT_SHOW, toggleWindow); } catch (e) {}
-    try { shortcutState.focus = globalShortcut.register(SHORTCUT_FOCUS, () => send('hotkey', 'toggle')); } catch (e) {}
-    try { shortcutState.confetti = globalShortcut.register(SHORTCUT_CONFETTI, () => burstConfetti(true)); } catch (e) {}
-    try { shortcutState.tomato = globalShortcut.register(SHORTCUT_TOMATO, throwTomato); } catch (e) {}
+    loadKeys();
+    registerAll();
 
     // Tell the page when you leave and come back. Timestamps are taken here, at the
     // moment of the event, so a page that was frozen by sleep can still credit it correctly.
