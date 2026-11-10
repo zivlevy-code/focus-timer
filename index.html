@@ -248,6 +248,10 @@ body.compact main { padding: 10px; }
         </select>
       </label>
       <label>תאריך הגשה <input type="date" id="newDue"></label>
+      <label>תגית
+        <select id="newTag"><option value="">ללא תגית</option></select>
+        <input type="text" id="newTagName" placeholder="שם התגית" maxlength="30" aria-label="שם התגית החדשה" hidden>
+      </label>
     </div>
     <p class="note" id="tagTotal"></p>
     <ul class="list" id="list"></ul>
@@ -760,10 +764,15 @@ body.compact main { padding: 10px; }
     var inp = $('#newTask'), v = inp.value.trim();
     if (!v) { inp.focus(); return; }
     var sp = splitTags(v);
-    var t = { id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: sp.title || v, done: false, ms: 0, pri: +$('#newPri').value, due: $('#newDue').value || '', tags: sp.title ? sp.tags : [], section: section === 'backlog' ? 'backlog' : 'today' };
+    var tags = sp.title ? sp.tags : [];
+    var picked = pickedTag();
+    if (picked) tags = uniqueTags(tags.concat([picked]));
+    var t = { id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: sp.title || v, done: false, ms: 0, pri: +$('#newPri').value, due: $('#newDue').value || '', tags: tags, section: section === 'backlog' ? 'backlog' : 'today' };
     S.tasks.push(t);
     inp.value = ''; inp.classList.remove('nudge');
     $('#newPri').value = '1'; $('#newDue').value = '';
+    // Keep the chosen tag for the next task; a newly typed one becomes a normal choice.
+    if (picked) { S.newTag = picked; $('#newTag').value = ''; $('#newTagName').value = ''; $('#newTagName').hidden = true; }
     ensureCurrent(); save(); paintAll(); inp.focus();
   }
   function nudge() {
@@ -840,6 +849,27 @@ body.compact main { padding: 10px; }
     });
     sel.value = want;
     lab.style.display = tags.length ? '' : 'none';
+    updateNewTag(tags);
+  }
+  // Tag picker next to the new-task box: existing tags, or type a new one.
+  function updateNewTag(tags) {
+    var sel = $('#newTag');
+    if (!sel) return;
+    var want = sel.value === '__new' ? '__new' : (S.newTag || '');
+    if (want && want !== '__new' && !tags.some(function (g) { return g.toLowerCase() === want.toLowerCase(); })) want = S.newTag = '';
+    sel.textContent = '';
+    [['', 'ללא תגית']].concat(tags.map(function (g) { return [g, '#' + g]; }), [['__new', '+ תגית חדשה']]).forEach(function (o) {
+      var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op);
+    });
+    sel.value = want;
+  }
+  function pickedTag() {
+    var v = $('#newTag').value;
+    if (v === '__new') {
+      var name = $('#newTagName').value.trim().replace(/^#/, '');
+      return TAG_WORD.test(name) ? name : '';
+    }
+    return v;
   }
   function paintList() {
     var ul = $('#list'), bl = $('#blList'), tg = $('#blToggle'), tt = $('#tagTotal');
@@ -1130,6 +1160,12 @@ body.compact main { padding: 10px; }
   $('#addBtn').onclick = addTask;
   $('#newTask').addEventListener('keydown', function (e) { if (e.key === 'Enter') addTask(); });
   $('#newTask').addEventListener('input', function () { this.classList.remove('nudge'); });
+  $('#newTag').onchange = function () {
+    var isNew = this.value === '__new';
+    $('#newTagName').hidden = !isNew;
+    if (isNew) $('#newTagName').focus(); else S.newTag = this.value;
+  };
+  $('#newTagName').addEventListener('keydown', function (e) { if (e.key === 'Enter') addTask(); });
 
   function applySettings() {
     var w = Math.min(120, Math.max(1, parseInt($('#workMin').value, 10) || 25));
@@ -1170,10 +1206,12 @@ body.compact main { padding: 10px; }
   $('#workMin').value = S.work; $('#breakMin').value = S.brk; $('#lunchCustom').value = S.lunchMin || 45;
   $('#sortBy').value = S.sort || 'manual';
   $('#longMin').value = S.longMin; $('#longEvery').value = S.longEvery;
-  if (S.wake) { wakeOn = true; acquireWake(); }
+  // The desktop app has no use for "keep screen on" or "float above windows": website only.
+  if (S.wake && !window.focusApp) { wakeOn = true; acquireWake(); }
   paintWake();
   paintAll();
-  $('#floatBtn').hidden = !(window.focusApp || 'documentPictureInPicture' in window);
+  $('#floatBtn').hidden = !!window.focusApp || !('documentPictureInPicture' in window);
+  if (window.focusApp) $('#wakeBtn').hidden = true;
   if (window.focusApp) {
     $('#idleLabel').style.display = '';
     $('#idleMin').value = S.idleMin == null ? 3 : S.idleMin;
