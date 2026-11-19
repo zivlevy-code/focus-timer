@@ -63,6 +63,7 @@ Do not add network requests. The app runs offline and its CSP blocks them. Do no
 
 - Timer: tick every 250 ms, time credited by clock difference. Work rounds, short break, long break every 4th round (settings), lunch break (user picks minutes), "finished early" choice.
 - Away detection (app only): lock, sleep or 3 min idle pauses the round **as of when the user left** and gives that time back to the task. Manual pause is never auto-resumed. Away more than 30 min cancels the round.
+- Coming back after an idle pause (no keyboard or mouse, not a lock or sleep) of a minute or more brings the window forward and asks "were you working?". Yes counts the whole time as work (credited to the task and taken off the round, which may end it); No keeps it as away. The window then goes back the way it was (`window:forward`, then `note:done`).
 - Tomato rain over the whole screen runs for the whole of a normal or long break. Lunch gets only about 10 seconds.
 - Today's list drives the timer. The backlog is only used when today is empty.
 - Repeating tasks: when done and the day ends (or done tasks are cleared), a copy goes to history and the task comes back unticked with its next date as the due date, waiting in the backlog until that day. Week days are Sunday to Thursday.

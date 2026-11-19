@@ -366,6 +366,13 @@ ipcMain.handle('shortcuts:reset', () => {
 ipcMain.on('shortcuts:pause', (e, on) => {
   if (on) globalShortcut.unregisterAll(); else registerAll();
 });
+// The page has a question for you (were you working while idle?): bring the window
+// forward; 'note:done' puts it back the way it was once answered.
+ipcMain.on('window:forward', () => {
+  if (!win) return;
+  noteReturn = !win.isVisible() ? 'hide' : (win.isMinimized() || !win.isFocused()) ? 'minimize' : null;
+  showWindow();
+});
 ipcMain.on('note:done', () => {
   if (win && noteReturn === 'minimize') win.minimize();
   else if (win && noteReturn === 'hide') win.hide();

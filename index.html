@@ -496,6 +496,16 @@ table.week td.zero { color: var(--line); }
     </div>
   </div>
 </div>
+<div class="modal" id="awayAsk" hidden>
+  <div class="box" role="dialog" aria-labelledby="awayTitle">
+    <h2 id="awayTitle">ברוך שובך 👋</h2>
+    <p id="awayText"></p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn primary" id="awayYes">כן, עבדתי</button>
+      <button class="btn" id="awayNo">לא, הייתי בחוץ</button>
+    </div>
+  </div>
+</div>
 <div class="modal" id="report" hidden>
   <div class="box wide" role="dialog" aria-labelledby="repTitle">
     <div class="repnav">
@@ -606,13 +616,13 @@ table.week td.zero { color: var(--line); }
     'הגדלה, הקטנה או גודל רגיל של התצוגה.': 'Make the display larger, smaller, or back to normal.',
     'בוקר טוב! המשימות שהושלמו עברו להיסטוריה ומונה הסבבים התאפס. יום חדש מתחיל כל בוקר ב-4:00.': 'Good morning! Finished tasks moved to history and the round counter was reset. A new day starts every morning at 4:00.',
     'בוא נתחיל': "Let's go", 'כמה זמן זה לקח?': 'How long did it take?', 'או בדקות': 'Or in minutes', 'שמור': 'Save', 'דלג': 'Skip',
-    '✉️ שלח לי ב-Gmail': '✉️ Send to me in Gmail', 'העתק': 'Copy', 'סגור': 'Close', '✓ סיימתי': '✓ Done',
+    '✉️ שלח לי ב-Gmail': '✉️ Send to me in Gmail', 'העתק': 'Copy', 'סגור': 'Close', '✓ סיימתי': '✓ Done', 'ברוך שובך 👋': 'Welcome back 👋', 'כן, עבדתי': 'Yes, I was working', 'לא, הייתי בחוץ': 'No, I was away',
     '🕵️ זיהוי הסחות דעת בזמן סבב': '🕵️ Spot distractions during a round',
     'אתרים ותוכנות מסיחים (מופרדים בפסיק)': 'Distracting sites and programs (comma separated)'
   };
   var origText = new WeakMap(), origAttr = new WeakMap();
   // Parts filled in by code (task names, tags, history...) are never run through EN.
-  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn,#sumTitle,#askTask,#askTomatoes,#repTitle,#repBody,#repPrev,#repNext,#zoomVal,#garden,#badges';
+  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn,#sumTitle,#askTask,#askTomatoes,#repTitle,#repBody,#repPrev,#repNext,#zoomVal,#garden,#badges,#awayText';
   function isDynamic(el) { return !!(el && el.closest && el.closest(DYNAMIC)); }
   function translateStatic() {
     var en = S.lang === 'en';
@@ -2109,7 +2119,9 @@ table.week td.zero { color: var(--line); }
     window.focusApp.setStatus({ mode: S.mode, running: S.running, remaining: S.remaining, total: total(), lunch: !!S.lunch, task: c ? c.text : '', lang: S.lang, watch: !!S.distractOn, vol: S.sound === 'none' ? 0 : S.vol });
   }
   // Pause as of the moment you left, not the moment it was noticed.
-  function awayStart(since) {
+  // kind: 'idle' (no keyboard or mouse) or 'lock' (locked screen or sleep).
+  function awayStart(since, kind) {
+    if (S.autoPaused && kind === 'lock') S.awayKind = 'lock'; // locked after going idle: really away
     if (!S.running || S.mode !== 'work') return;
     tick();
     if (!S.running || S.mode !== 'work') return;
@@ -2118,7 +2130,7 @@ table.week td.zero { color: var(--line); }
     S.remaining += over;
     var c = byId(S.currentId);
     if (c) credit(c, -over);
-    S.running = false; S.autoPaused = true; S.awayAt = since;
+    S.running = false; S.autoPaused = true; S.awayAt = since; S.awayKind = kind || 'idle';
     save(); paintAll();
   }
   function awayEnd() {
@@ -2132,14 +2144,41 @@ table.week td.zero { color: var(--line); }
     }
     S.running = true; S.lastTick = Date.now();
     save(); paintAll();
+    // Not touching the computer is not always being away (reading, thinking, a call):
+    // ask, and count the time as work if you say so. A locked screen or sleep is not asked.
+    if (S.awayKind === 'idle') askAway(Date.now() - S.awayAt);
+  }
+  var awayAsk = null;
+  function askAway(ms) {
+    if (!(ms >= 60000)) return;
+    awayAsk = { ms: ms, round: S.round ? S.round.at : 0 };
+    var mins = Math.round(ms / 60000);
+    $('#awayText').textContent = L('לא נגעת במחשב ' + mins + ' דקות, אז הטיימר עצר. עבדת בזמן הזה?', "You didn't touch the computer for " + mins + ' minutes, so the timer stopped. Were you working?');
+    $('#awayAsk').hidden = false;
+    $('#awayYes').focus();
+    if (window.focusApp && window.focusApp.bringForward) window.focusApp.bringForward();
+  }
+  function answerAway(worked) {
+    var a = awayAsk; awayAsk = null;
+    $('#awayAsk').hidden = true;
+    if (window.focusApp && window.focusApp.noteDone) window.focusApp.noteDone(); // the window goes back the way it was
+    if (!a || !worked) return;
+    if (S.mode !== 'work' || !S.round || S.round.at !== a.round) { toast(L('הסבב כבר הסתיים, אז הזמן לא נוסף.', 'That round is over, so the time was not added.')); return; }
+    if (S.running) tick();
+    var c = byId(S.currentId);
+    if (c) credit(c, a.ms);
+    S.remaining -= a.ms;
+    toast(L('נספרו ' + Math.round(a.ms / 60000) + ' דקות עבודה ✓', Math.round(a.ms / 60000) + ' minutes counted as work ✓'));
+    if (S.remaining <= 0) { S.remaining = 0; phaseEnded(); return; }
+    save(); paintAll(); armEnd();
   }
   function onPresence(d) {
-    if (d.type === 'lock' || d.type === 'suspend') { screenAway = true; awayStart(d.ts || Date.now()); }
+    if (d.type === 'lock' || d.type === 'suspend') { screenAway = true; awayStart(d.ts || Date.now(), 'lock'); }
     else if (d.type === 'unlock' || d.type === 'resume') { screenAway = false; awayEnd(); }
     else if (d.type === 'idle') {
       breakActivity(d.idleSec);
       var th = (S.idleMin == null ? 3 : S.idleMin) * 60;
-      if (th > 0 && d.idleSec >= th) awayStart(Date.now() - d.idleSec * 1000);
+      if (th > 0 && d.idleSec >= th) awayStart(Date.now() - d.idleSec * 1000, 'idle');
       else if (d.idleSec < 4 && !screenAway) awayEnd();
     }
   }
@@ -2261,6 +2300,9 @@ table.week td.zero { color: var(--line); }
   $('#askMin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#askSave').click(); });
   $('#askTime').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAsk(); });
   $('#askTime').addEventListener('click', function (e) { if (e.target === this) closeAsk(); });
+  $('#awayYes').onclick = function () { answerAway(true); };
+  $('#awayNo').onclick = function () { answerAway(false); };
+  $('#awayAsk').addEventListener('keydown', function (e) { if (e.key === 'Escape') answerAway(false); });
   $('#reportBtn').onclick = function () { openReport(1); };
   $('#repPrev').onclick = function () { openReport(repBack + 1); };
   $('#repNext').onclick = function () { openReport(repBack - 1); };

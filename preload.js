@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld('focusApp', {
   pauseShortcuts: (on) => ipcRenderer.send('shortcuts:pause', !!on),
   resetShortcuts: () => ipcRenderer.invoke('shortcuts:reset'),
   noteDone: () => ipcRenderer.send('note:done'),
+  bringForward: () => ipcRenderer.send('window:forward'),
   getAutostart: () => ipcRenderer.invoke('autostart:get'),
   setAutostart: (on) => ipcRenderer.invoke('autostart:set', !!on),
   saveCsv: (name, text) => ipcRenderer.invoke('file:saveCsv', name, text),
