@@ -275,6 +275,12 @@ ipcMain.handle('shell:openTasks', async () => {
   return shell.openPath(p);
 });
 ipcMain.handle('shell:openData', async () => shell.openPath(app.getPath('userData')));
+// The weekly report opens a Gmail draft in the default browser. Only Gmail links are allowed.
+ipcMain.handle('shell:openMail', async (e, url) => {
+  if (typeof url !== 'string' || !url.startsWith('https://mail.google.com/mail/')) return false;
+  await shell.openExternal(url);
+  return true;
+});
 
 ipcMain.on('confetti:burst', (e, big) => burstConfetti(!!big));
 ipcMain.on('rain:set', (e, mode) => setRain(mode));

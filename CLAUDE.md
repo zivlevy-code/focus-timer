@@ -54,7 +54,8 @@ Do not add network requests. The app runs offline and its CSP blocks them. Do no
   `- [ ] Title #tag !high @2026-11-10 <!--t:ID-->`. A heading containing "Backlog" starts the backlog. Everything that is not a checkbox line must be left untouched when the file is rewritten. Hand-typed lines without an id get a stable id derived from their text.
 - Time spent, history and counters are **not** in the markdown file. They are matched to tasks by id. Deleting a line deletes that task (finished ones go to history).
 - A task: `{ id, text, done, ms, pri (0,1,2), due, tags[], section ('today'|'backlog'), doneAt, note, est, pomos, repeat ('daily'|'weekdays'|'weekly'), repeatDay }`. `note`, `est` (estimated rounds), `pomos` (rounds done) and `repeat` live only in the data file, matched by id.
-- `log` in the state: per day (`YYYY-MM-DD`) `{ ms, rounds, tags: { lowercased tag or '': ms } }`, kept 400 days. Feeds the week table and the daily goal.
+- `log` in the state: per working day (`YYYY-MM-DD`, the day turns at 4 AM, see `workDay()`) `{ ms, rounds, tags: { lowercased tag or '': ms } }`, kept 400 days. Feeds the week table, the daily goal and the weekly report.
+- Other state: `zoom` (display size), `mail` (the user's own address for the weekly report, stored only locally), `reportWeek` (the Sunday of the last week whose report was offered), `lastDay`.
 - The order of tasks in the app is the order in `tasks.md` (drag to reorder rewrites the file order; headings and notes stay put).
 
 ## Behaviour to preserve
@@ -64,7 +65,10 @@ Do not add network requests. The app runs offline and its CSP blocks them. Do no
 - Tomato rain over the whole screen runs for the whole of a normal or long break. Lunch gets only about 10 seconds.
 - Today's list drives the timer. The backlog is only used when today is empty.
 - Repeating tasks: when done and the day ends (or done tasks are cleared), a copy goes to history and the task comes back unticked with its next date as the due date, waiting in the backlog until that day. Week days are Sunday to Thursday.
-- "New day" first shows a summary of the day, then archives.
+- The day turns by itself at 4 AM (not midnight, so late nights count as the same day). On the first check after that, the page shows a summary of the day that ended, archives finished tasks and resets the round counter. A round still running at 4 AM delays this until it ends. There is no "new day" button any more.
+- Ticking a task (or "task done") with less than 5 minutes on it asks how long it took, in tomatoes (½ to 4, one tomato = the work minutes setting) or minutes. The task is topped up to that time, and every full tomato counts as a round toward the daily goal.
+- Weekly report (Sunday to Saturday): shown by itself on the first day of a new week if last week had work, and from the History section any time. "Send to me in Gmail" opens a Gmail draft in the browser (`shell:openMail` in the app, which only accepts `https://mail.google.com/mail/` links). Nothing is sent by the app itself.
+- Display size: Settings, or Ctrl + / Ctrl - / Ctrl 0. The app uses `webFrame.setZoomFactor`, the website CSS `zoom`.
 - Delete shows a toast with undo for 7 seconds.
 - Tags: `#word` in a task name (letters only, so `#42` and `C#` are not tags). Case-insensitive, kept as first written.
 

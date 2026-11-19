@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 const fs = require('fs');
 const md = require('./tasksmd');
 
@@ -99,5 +99,7 @@ contextBridge.exposeInMainWorld('focusApp', {
   syncTasks,
   onTasksFile,
   openTasksFile: () => ipcRenderer.invoke('shell:openTasks'),
-  openDataFolder: () => ipcRenderer.invoke('shell:openData')
+  openDataFolder: () => ipcRenderer.invoke('shell:openData'),
+  openMail: (url) => ipcRenderer.invoke('shell:openMail', String(url)),
+  setZoom: (f) => webFrame.setZoomFactor(Math.min(1.6, Math.max(0.7, +f || 1)))
 });

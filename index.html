@@ -218,6 +218,28 @@ table.week td.zero { color: var(--line); }
 .modal h2 { margin-bottom: 8px; }
 .modal ul { margin: 6px 0 12px; padding-inline-start: 20px; }
 .sumstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.zoomrow { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.zoomrow .btn { min-height: 36px; padding: 2px 14px; font-size: 18px; border: 1px solid var(--line); }
+.zoomrow b { min-width: 52px; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tomrow { margin: 12px 0; }
+.tomrow .btn { min-width: 74px; }
+.askrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.askrow input { width: 90px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.modal .box.wide { width: min(560px, 100%); }
+.repnav { display: flex; align-items: center; gap: 8px; }
+.repnav h2 { margin: 0; font-size: 19px; text-align: center; flex: 1; }
+.repnav .btn { min-height: 36px; padding: 2px 14px; font-size: 18px; border: 1px solid var(--line); }
+.sumstats.four { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 520px) { .sumstats.four { grid-template-columns: repeat(2, 1fr); } }
+#repBody h3 { font-size: 15px; margin: 16px 0 6px; color: var(--muted); }
+#repBody p { margin: 5px 0; }
+.rbar { display: grid; grid-template-columns: 74px 1fr 52px; align-items: center; gap: 8px; font-size: 14px; margin: 4px 0; }
+.rbar .track { background: var(--soft); border-radius: 99px; height: 12px; overflow: hidden; }
+.rbar .track i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+.rbar .v { text-align: end; font-variant-numeric: tabular-nums; direction: ltr; color: var(--muted); }
+.rbar .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend-up { color: #2E7D32; font-weight: 600; }
+.trend-down { color: #C62828; font-weight: 600; }
 .settings select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
 .settings input[type="range"] { width: 140px; padding: 0; }
 .settings label.check { display: flex; align-items: center; gap: 8px; }
@@ -340,6 +362,7 @@ table.week td.zero { color: var(--line); }
     <summary>היסטוריה</summary>
     <h3 class="hist-day">השבוע האחרון לפי תגית <span>שעות:דקות</span></h3>
     <div class="weekwrap" id="weekBox"></div>
+    <button class="btn ghost" id="reportBtn">📊 דוח שבועי</button>
     <button class="btn ghost" id="exportBtn">ייצוא ההיסטוריה לאקסל</button>
     <div id="histList"></div>
   </details>
@@ -353,6 +376,7 @@ table.week td.zero { color: var(--line); }
       <tr><td><kbd>Enter</kbd> / <kbd>Esc</kbd></td><td>בעריכת תגיות: שמירה או ביטול.</td></tr>
       <tr><td><kbd>Enter</kbd></td><td>בשדה הפסקת הצהריים: יוצא להפסקה.</td></tr>
       <tr><td><code>#תגית</code></td><td>בתוך שם של משימה חדשה: מוסיף לה תגית.</td></tr>
+      <tr><td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></td><td>הגדלה, הקטנה או גודל רגיל של התצוגה.</td></tr>
       <tr class="app-only" style="display:none"><td><code>!high</code> <code>!low</code> <code>@2026-11-10</code></td><td>בקובץ המשימות: דחיפות ותאריך הגשה. הכותרת <code>## Backlog</code> פותחת את ה-Backlog.</td></tr>
       <tr class="app-only" style="display:none"><td>סמל העגבנייה</td><td>לחיצה ימנית באזור ההודעות: הצג או הסתר, התחל או השהה, יציאה.</td></tr>
     </tbody></table>
@@ -392,9 +416,14 @@ table.week td.zero { color: var(--line); }
           <option value="en">English</option>
         </select>
       </label>
+      <div class="zoomrow">גודל תצוגה
+        <button class="btn ghost" id="zoomOut" aria-label="הקטן">−</button>
+        <b id="zoomVal">100%</b>
+        <button class="btn ghost" id="zoomIn" aria-label="הגדל">+</button>
+      </div>
+      <label>המייל שלך, לדוח השבועי <input type="email" id="mailIn" dir="ltr" style="width:230px" placeholder="name@gmail.com"></label>
       <label class="check app-only" style="display:none"><input type="checkbox" id="autoStart"> הפעל עם הדלקת המחשב</label>
       <button class="btn ghost" id="clearDone">נקה משימות שהושלמו</button>
-      <button class="btn ghost" id="clearAll">התחל יום חדש</button>
       <span id="fileTools" style="display:none">
         <button class="btn ghost" id="openTasksFile">פתח את קובץ המשימות</button>
         <button class="btn ghost" id="openDataFolder">תיקיית הנתונים</button>
@@ -409,17 +438,43 @@ table.week td.zero { color: var(--line); }
 <div class="toast" id="toast" role="status" hidden><span id="toastText"></span><button id="toastBtn" hidden></button></div>
 <div class="modal" id="summary" hidden>
   <div class="box" role="dialog" aria-labelledby="sumTitle">
-    <h2 id="sumTitle">סיכום היום</h2>
+    <h2 id="sumTitle"></h2>
     <div class="sumstats">
       <div class="stat"><b id="sumTime">00:00</b><span>זמן עבודה</span></div>
       <div class="stat"><b id="sumDone">0</b><span>משימות הושלמו</span></div>
       <div class="stat"><b id="sumPomo">0</b><span>סבבים</span></div>
     </div>
     <div id="sumBody"></div>
-    <p class="note">התחלת יום חדש מעבירה את המשימות שהושלמו להיסטוריה ומאפסת את מונה הסבבים.</p>
+    <p class="note">בוקר טוב! המשימות שהושלמו עברו להיסטוריה ומונה הסבבים התאפס. יום חדש מתחיל כל בוקר ב-4:00.</p>
     <div class="row" style="margin-top:12px">
-      <button class="btn primary" id="sumGo">התחל יום חדש</button>
-      <button class="btn" id="sumCancel">ביטול</button>
+      <button class="btn primary" id="sumGo">בוא נתחיל</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="askTime" hidden>
+  <div class="box" role="dialog" aria-labelledby="askTitle">
+    <h2 id="askTitle">כמה זמן זה לקח?</h2>
+    <p class="note" id="askTask"></p>
+    <div class="row tomrow" id="askTomatoes"></div>
+    <div class="askrow">
+      <label class="askrow">או בדקות <input type="number" id="askMin" min="1" max="600"></label>
+      <button class="btn" id="askSave">שמור</button>
+      <button class="btn ghost" id="askSkip">דלג</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="report" hidden>
+  <div class="box wide" role="dialog" aria-labelledby="repTitle">
+    <div class="repnav">
+      <button class="btn ghost" id="repPrev" title="שבוע קודם">›</button>
+      <h2 id="repTitle"></h2>
+      <button class="btn ghost" id="repNext" title="השבוע הבא">‹</button>
+    </div>
+    <div id="repBody"></div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn primary" id="repMail">✉️ שלח לי ב-Gmail</button>
+      <button class="btn" id="repCopy">העתק</button>
+      <button class="btn ghost" id="repClose">סגור</button>
     </div>
   </div>
 </div>
@@ -429,7 +484,7 @@ table.week td.zero { color: var(--line); }
 (function () {
   var KEY = 'focus-timer-v1';
   var $ = function (s) { return document.querySelector(s) || (pipWin && pipWin.document.querySelector(s)); };
-  var S = { tasks: [], currentId: null, mode: 'idle', running: false, remaining: 25 * 60000, lastTick: 0, pomos: 0, work: 25, brk: 5, choosing: false, history: [], cycles: 0, longMin: 15, longEvery: 4, tagColors: {}, tagNames: {}, tagFilter: '__all', backlogOpen: false, log: {}, goal: 8, sound: 'bell', vol: 70, theme: 'auto', lastDay: '', dueNotified: '', lang: 'he' };
+  var S = { tasks: [], currentId: null, mode: 'idle', running: false, remaining: 25 * 60000, lastTick: 0, pomos: 0, work: 25, brk: 5, choosing: false, history: [], cycles: 0, longMin: 15, longEvery: 4, tagColors: {}, tagNames: {}, tagFilter: '__all', backlogOpen: false, log: {}, goal: 8, sound: 'bell', vol: 70, theme: 'auto', lastDay: '', dueNotified: '', lang: 'he', zoom: 1, mail: '', reportWeek: '' };
 
   function load() {
     try {
@@ -459,6 +514,9 @@ table.week td.zero { color: var(--line); }
       S.lastDay = typeof o.lastDay === 'string' ? o.lastDay : '';
       S.dueNotified = typeof o.dueNotified === 'string' ? o.dueNotified : '';
       S.lang = o.lang === 'en' ? 'en' : 'he';
+      S.zoom = Math.min(1.6, Math.max(0.7, +o.zoom || 1));
+      S.mail = typeof o.mail === 'string' ? o.mail : '';
+      S.reportWeek = typeof o.reportWeek === 'string' ? o.reportWeek : '';
     } catch (e) {}
     S.remaining = S.work * 60000;
   }
@@ -503,11 +561,17 @@ table.week td.zero { color: var(--line); }
     'אחר (בדקות)': 'Other (minutes)', 'זמן הפסקת צהריים בדקות': 'Lunch length in minutes', 'מה צריך לעשות?': 'What needs doing?',
     'משימה חדשה': 'New task', 'להוסיף ל-Backlog, בלי להתחייב להיום': 'Add to the backlog, without committing to today',
     'שם התגית': 'Tag name', 'שם התגית החדשה': 'New tag name', 'סיכום': 'Summary', 'פתק מהיר': 'Quick note',
-    'למשל: להתקשר לרואה החשבון #בית': 'e.g. call the accountant #home', 'שפה / Language': 'Language / שפה'
+    'למשל: להתקשר לרואה החשבון #בית': 'e.g. call the accountant #home', 'שפה / Language': 'Language / שפה',
+    'גודל תצוגה': 'Display size', 'הקטן': 'Smaller', 'הגדל': 'Larger',
+    'המייל שלך, לדוח השבועי': 'Your email, for the weekly report', '📊 דוח שבועי': '📊 Weekly report',
+    'הגדלה, הקטנה או גודל רגיל של התצוגה.': 'Make the display larger, smaller, or back to normal.',
+    'בוקר טוב! המשימות שהושלמו עברו להיסטוריה ומונה הסבבים התאפס. יום חדש מתחיל כל בוקר ב-4:00.': 'Good morning! Finished tasks moved to history and the round counter was reset. A new day starts every morning at 4:00.',
+    'בוא נתחיל': "Let's go", 'כמה זמן זה לקח?': 'How long did it take?', 'או בדקות': 'Or in minutes', 'שמור': 'Save', 'דלג': 'Skip',
+    '✉️ שלח לי ב-Gmail': '✉️ Send to me in Gmail', 'העתק': 'Copy', 'סגור': 'Close'
   };
   var origText = new WeakMap(), origAttr = new WeakMap();
   // Parts filled in by code (task names, tags, history...) are never run through EN.
-  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn';
+  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn,#sumTitle,#askTask,#askTomatoes,#repTitle,#repBody,#repPrev,#repNext,#zoomVal';
   function isDynamic(el) { return !!(el && el.closest && el.closest(DYNAMIC)); }
   function translateStatic() {
     var en = S.lang === 'en';
@@ -530,7 +594,7 @@ table.week td.zero { color: var(--line); }
   }
   function save() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ tasks: S.tasks, pomos: S.pomos, work: S.work, brk: S.brk, lunchMin: S.lunchMin, idleMin: S.idleMin, longMin: S.longMin, longEvery: S.longEvery, cycles: S.cycles, tagColors: S.tagColors, history: S.history, wake: wakeOn, sort: S.sort || 'manual', currentId: S.currentId, log: S.log, goal: S.goal, sound: S.sound, vol: S.vol, theme: S.theme, lastDay: S.lastDay, dueNotified: S.dueNotified, lang: S.lang }));
+      localStorage.setItem(KEY, JSON.stringify({ tasks: S.tasks, pomos: S.pomos, work: S.work, brk: S.brk, lunchMin: S.lunchMin, idleMin: S.idleMin, longMin: S.longMin, longEvery: S.longEvery, cycles: S.cycles, tagColors: S.tagColors, history: S.history, wake: wakeOn, sort: S.sort || 'manual', currentId: S.currentId, log: S.log, goal: S.goal, sound: S.sound, vol: S.vol, theme: S.theme, lastDay: S.lastDay, dueNotified: S.dueNotified, lang: S.lang, zoom: S.zoom, mail: S.mail, reportWeek: S.reportWeek }));
     } catch (e) {}
     syncFile();
   }
@@ -892,20 +956,20 @@ table.week td.zero { color: var(--line); }
   }
   function credit(t, ms) {
     t.ms = Math.max(0, (t.ms || 0) + ms);
-    var d = logDay(dayKey(Date.now()));
+    var d = logDay(workDay(Date.now()));
     d.ms = Math.max(0, (d.ms || 0) + ms);
     var tg = tagsOf(t);
     (tg.length ? tg.map(function (g) { return g.toLowerCase(); }) : ['']).forEach(function (k) {
       d.tags[k] = Math.max(0, (d.tags[k] || 0) + ms);
     });
   }
-  function roundsToday() { var d = S.log[dayKey(Date.now())]; return d ? (d.rounds || 0) : 0; }
+  function roundsToday() { var d = S.log[workDay(Date.now())]; return d ? (d.rounds || 0) : 0; }
   // A finished work round: counters, the task's rounds, and the daily goal.
   function addRound(taskId) {
     S.pomos++;
     var c = byId(taskId || S.currentId);
     if (c) c.pomos = (c.pomos || 0) + 1;
-    var d = logDay(dayKey(Date.now()));
+    var d = logDay(workDay(Date.now()));
     d.rounds = (d.rounds || 0) + 1;
     if (S.goal > 0 && d.rounds === S.goal) {
       setTimeout(function () { confetti(true); toast(L('🎯 הגעת ליעד היומי: ' + S.goal + ' סבבים! כל הכבוד', '🎯 Daily goal reached: ' + S.goal + ' rounds! Well done')); notify(L('הגעת ליעד היומי 🎯', 'Daily goal reached 🎯')); }, 1500);
@@ -965,6 +1029,7 @@ table.week td.zero { color: var(--line); }
     c.done = true; c.doneAt = Date.now();
     S.finishedId = c.id;
     confetti(false); beep(2);
+    askTime(c);
     var next = firstOpen();
     if (S.mode === 'work' && S.remaining > 0) {
       S.running = false; S.choosing = true;
@@ -1062,6 +1127,7 @@ table.week td.zero { color: var(--line); }
     var t = byId(id); if (!t) return;
     t.done = !t.done; t.doneAt = t.done ? Date.now() : undefined;
     if (t.done) { confetti(false); beep(1); }
+    if (t.done) askTime(t);
     if (S.currentId === id && t.done) {
       var n = firstOpen(); S.currentId = n ? n.id : null;
     } else ensureCurrent();
@@ -1128,7 +1194,7 @@ table.week td.zero { color: var(--line); }
     t.repeatDay = base.getDay();
   }
   function renewRepeat(t, afterToday) {
-    S.history.push({ text: t.text, tags: tagsOf(t).slice(), doneAt: t.doneAt || Date.now(), ms: t.ms || 0 });
+    S.history.push({ text: t.text, tags: tagsOf(t).slice(), doneAt: t.doneAt || Date.now(), ms: t.ms || 0, est: t.est || 0, pomos: t.pomos || 0 });
     t.done = false; t.doneAt = undefined; t.ms = 0; t.pomos = 0;
     var d = new Date(); if (afterToday) d.setDate(d.getDate() + 1);
     var today = dayKey(Date.now());
@@ -1137,24 +1203,35 @@ table.week td.zero { color: var(--line); }
     if (S.currentId === t.id && t.section === 'backlog') S.currentId = null;
   }
   function rollRepeats() {
-    var today = dayKey(Date.now());
+    var today = workDay(Date.now());
     S.tasks.forEach(function (t) {
       if (!t.repeat) return;
-      if (t.done && t.doneAt && dayKey(t.doneAt) < today) renewRepeat(t, false);
+      if (t.done && t.doneAt && workDay(t.doneAt) < today) renewRepeat(t, false);
       else if (!t.done && secOf(t) === 'backlog' && t.due && t.due <= today) t.section = 'today';
     });
     ensureCurrent();
   }
-  // Once a day: bring back repeating tasks, prune the old log, and remind about due dates.
+  // Once a day (the day turns at 4 AM): show yesterday's summary and start a new day,
+  // bring back repeating tasks, prune the old log, remind about due dates, and on the
+  // first day of a new week show last week's report.
   function dayCheck() {
-    var today = dayKey(Date.now());
-    if (S.lastDay !== today) {
+    var today = workDay(Date.now());
+    // A round still running at 4 AM: wait for it to end (this runs every minute).
+    if (S.lastDay !== today && !S.running) {
+      var prev = S.lastDay;
       S.lastDay = today;
       rollRepeats();
+      if (prev) startNewDay(prev);
       var cut = new Date(); cut.setDate(cut.getDate() - 400); cut = keyOf(cut);
       Object.keys(S.log).forEach(function (k) { if (k < cut) delete S.log[k]; });
       save(); paintAll();
     }
+    var wk = keyOf(weekStart(0));
+    if (S.reportWeek !== wk) {
+      if (S.reportWeek && weekStats(1).ms >= 60000) reportPending = true;
+      S.reportWeek = wk; save();
+    }
+    showPendingReport();
     if (S.dueNotified !== today) {
       var c = dueCounts();
       if (c.late || c.today) {
@@ -1353,6 +1430,9 @@ table.week td.zero { color: var(--line); }
     } else tt.textContent = '';
   }
   function dayKey(ts) { var d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  // The working day runs from 4 AM to 4 AM, so a late night still counts as the same day.
+  var DAY_START = 4 * 3600000;
+  function workDay(ts) { return dayKey(ts - DAY_START); }
   function dayLabel(key) {
     var now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var p = key.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]);
@@ -1402,7 +1482,7 @@ table.week td.zero { color: var(--line); }
     var box = $('#weekBox'); if (!box) return;
     box.textContent = '';
     var days = [];
-    for (var i = 6; i >= 0; i--) { var d = new Date(); d.setDate(d.getDate() - i); days.push({ k: keyOf(d), w: d.getDay(), dd: pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) }); }
+    for (var i = 6; i >= 0; i--) { var d = new Date(Date.now() - DAY_START); d.setDate(d.getDate() - i); days.push({ k: keyOf(d), w: d.getDay(), dd: pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) }); }
     var sums = {}, any = false;
     days.forEach(function (d) {
       var L = S.log[d.k]; if (!L || !L.tags) return;
@@ -1467,13 +1547,15 @@ table.week td.zero { color: var(--line); }
     a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
   }
-  // Shown before "new day": what got done since the last one.
-  function openSummary() {
+  // Shown at the first moment of a new day (4 AM): what got done on the day that ended.
+  function fillSummary(prev) {
     var done = S.tasks.filter(function (t) { return t.done; });
-    var ms = S.tasks.reduce(function (a, t) { return a + (t.ms || 0); }, 0);
+    var lg = S.log[prev] || {};
+    var ms = lg.ms || S.tasks.reduce(function (a, t) { return a + (t.ms || 0); }, 0);
+    $('#sumTitle').textContent = L('סיכום של יום ', 'Summary of ') + dayName(dateOf(prev).getDay()) + ' ' + shortDate(prev);
     $('#sumTime').textContent = hm(ms);
     $('#sumDone').textContent = done.length;
-    $('#sumPomo').textContent = S.pomos;
+    $('#sumPomo').textContent = Math.max(S.pomos, lg.rounds || 0);
     var body = $('#sumBody'); body.textContent = '';
     if (done.length) {
       var h = document.createElement('p'); h.textContent = L('מה הושלם:', 'Done:'); body.appendChild(h);
@@ -1482,27 +1564,172 @@ table.week td.zero { color: var(--line); }
       if (done.length > 12) { var more = document.createElement('li'); more.textContent = L('ועוד ', 'and ') + (done.length - 12) + L('', ' more'); ul.appendChild(more); }
       body.appendChild(ul);
     }
-    var byTag = {};
-    S.tasks.forEach(function (t) {
-      if (!(t.ms > 0)) return;
-      var tg = tagsOf(t); (tg.length ? tg : ['']).forEach(function (g) { byTag[g] = (byTag[g] || 0) + t.ms; });
-    });
-    var keys = Object.keys(byTag).sort(function (a, b) { return byTag[b] - byTag[a]; });
+    var byTag = lg.tags || {};
+    var keys = Object.keys(byTag).filter(function (g) { return byTag[g] >= 30000; }).sort(function (a, b) { return byTag[b] - byTag[a]; });
     if (keys.length) {
       var h2 = document.createElement('p'); h2.textContent = L('זמן לפי תגית:', 'Time by tag:'); body.appendChild(h2);
       var ul2 = document.createElement('ul');
-      keys.forEach(function (g) { var li = document.createElement('li'); li.textContent = (g ? '#' + g : L('ללא תגית', 'No tag')) + ': ' + hm(byTag[g]); ul2.appendChild(li); });
+      keys.forEach(function (g) { var li = document.createElement('li'); li.textContent = tagLabel(g) + ': ' + hm(byTag[g]); ul2.appendChild(li); });
       body.appendChild(ul2);
     }
-    if (!done.length && !keys.length) { var e = document.createElement('p'); e.className = 'note'; e.textContent = L('עוד לא נרשמה עבודה מאז היום החדש האחרון.', 'No work recorded since the last new day.'); body.appendChild(e); }
-    $('#summary').hidden = false;
-    $('#sumGo').focus();
+    if (!done.length && !keys.length) { var e = document.createElement('p'); e.className = 'note'; e.textContent = L('לא נרשמה עבודה ביום הזה.', 'No work was recorded that day.'); body.appendChild(e); }
   }
-  function newDay() {
-    $('#summary').hidden = true;
-    archiveDone(); S.currentId = null; ensureCurrent(); S.pomos = 0; S.cycles = 0; S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000;
+  // The day turned: summary of the day that ended, then finished tasks go to history
+  // and the round counter starts again.
+  function startNewDay(prev) {
+    var worked = S.tasks.some(function (t) { return t.done; }) || S.pomos > 0 || ((S.log[prev] || {}).ms || 0) >= 60000;
+    if (worked) fillSummary(prev);
+    archiveDone(); S.currentId = null; ensureCurrent(); S.pomos = 0; S.cycles = 0;
+    S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000;
+    if (worked) { $('#summary').hidden = false; $('#sumGo').focus(); }
+  }
+  function closeSummary() { $('#summary').hidden = true; showPendingReport(); }
+  function dateOf(k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2], 12); }
+  function shortDate(k) { var p = k.split('-'); return +p[2] + '.' + +p[1]; }
+  function tagLabel(g) { return g ? '#' + (S.tagNames[g] || g) : L('ללא תגית', 'No tag'); }
+
+  /* ---------- "how long did it take?" for a task ticked with little or no time ---------- */
+  var askId = null;
+  function askTime(t) {
+    if (!t || (t.ms || 0) >= 5 * 60000) return;
+    askId = t.id;
+    $('#askTask').textContent = t.text + (t.ms >= 60000 ? L(' · נספרו עד עכשיו ', ' · counted so far ') + hm(t.ms) : '');
+    var row = $('#askTomatoes'); row.textContent = '';
+    [0.5, 1, 2, 3, 4].forEach(function (n) {
+      var b = document.createElement('button'); b.className = 'btn';
+      b.textContent = (n === 0.5 ? '½' : n) + ' 🍅';
+      b.title = Math.round(n * S.work) + L(' דקות', ' minutes');
+      b.onclick = function () { setTaskTime(n * S.work); };
+      row.appendChild(b);
+    });
+    $('#askMin').value = '';
+    $('#askTime').hidden = false;
+    row.firstChild.focus();
+  }
+  function closeAsk() { askId = null; $('#askTime').hidden = true; showPendingReport(); }
+  // Tops the task up to the chosen time; every full round of it counts toward the daily goal.
+  function setTaskTime(min) {
+    var t = byId(askId); closeAsk();
+    if (!t || !(min > 0)) return;
+    var add = Math.round(min * 60000) - (t.ms || 0);
+    if (add > 0) credit(t, add);
+    var r = Math.floor(min / S.work + 1e-9);
+    for (var i = 0; i < r; i++) addRound(t.id);
     save(); paintAll();
+    toast(L('נרשם: ', 'Logged: ') + hm(t.ms) + L(' על ', ' on ') + (t.text.length > 30 ? t.text.slice(0, 30) + '…' : t.text));
   }
+
+  /* ---------- weekly report (Sunday to Saturday) ---------- */
+  var reportPending = false, repBack = 1, repText = '', repSubject = '';
+  // Sunday of the week `back` weeks ago (0 = this week).
+  function weekStart(back) {
+    var d = new Date(Date.now() - DAY_START); d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() - d.getDay() - 7 * back);
+    return d;
+  }
+  function weekStats(back) {
+    var s = weekStart(back), r = { days: [], ms: 0, rounds: 0, tags: {}, worked: 0, goalDays: 0, best: null, prevMs: 0 }, i, d, x;
+    for (i = 0; i < 7; i++) {
+      d = new Date(s); d.setDate(s.getDate() + i); x = S.log[keyOf(d)] || {};
+      r.days.push({ k: keyOf(d), w: d.getDay(), ms: x.ms || 0, rounds: x.rounds || 0, tags: x.tags || {} });
+    }
+    r.days.forEach(function (d) {
+      r.ms += d.ms; r.rounds += d.rounds;
+      if (d.ms >= 60000) r.worked++;
+      if (S.goal > 0 && d.rounds >= S.goal) r.goalDays++;
+      if (d.ms >= 60000 && (!r.best || d.ms > r.best.ms)) r.best = d;
+      Object.keys(d.tags).forEach(function (g) { r.tags[g] = (r.tags[g] || 0) + d.tags[g]; });
+    });
+    var p = weekStart(back + 1);
+    for (i = 0; i < 7; i++) { d = new Date(p); d.setDate(p.getDate() + i); r.prevMs += (S.log[keyOf(d)] || {}).ms || 0; }
+    r.from = r.days[0].k; r.to = r.days[6].k;
+    r.done = S.history.concat(S.tasks.filter(function (t) { return t.done; })).filter(function (it) {
+      var k = it.doneAt ? workDay(it.doneAt) : ''; return k >= r.from && k <= r.to;
+    });
+    var withEst = r.done.filter(function (it) { return it.est > 0; });
+    r.estN = withEst.length;
+    r.estOk = withEst.filter(function (it) { return (it.pomos || 0) <= it.est; }).length;
+    r.longest = r.done.reduce(function (a, it) { return !a || (it.ms || 0) > (a.ms || 0) ? it : a; }, null);
+    return r;
+  }
+  function openReport(back) {
+    repBack = Math.max(0, back == null ? 1 : back);
+    var r = weekStats(repBack), body = $('#repBody'), txt = [];
+    var range = shortDate(r.from) + '–' + shortDate(r.to);
+    $('#repTitle').textContent = (repBack === 0 ? L('השבוע הזה', 'This week') : repBack === 1 ? L('השבוע שעבר', 'Last week') : L('שבוע', 'Week')) + ' · ' + range;
+    $('#repPrev').textContent = L('›', '‹'); $('#repPrev').title = L('שבוע קודם', 'Previous week');
+    $('#repNext').textContent = L('‹', '›'); $('#repNext').title = L('השבוע הבא', 'Next week');
+    $('#repNext').disabled = repBack === 0;
+    repSubject = L('📊 דוח שבועי מהטיימר · ', '📊 Focus Timer weekly report · ') + range;
+    txt.push(repSubject, '');
+    body.textContent = '';
+    function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+    if (r.ms < 60000 && !r.done.length) {
+      body.appendChild(el('p', L('לא נרשמה עבודה בשבוע הזה.', 'No work was recorded this week.'), 'note'));
+      txt.push(L('לא נרשמה עבודה בשבוע הזה.', 'No work was recorded this week.'));
+      repText = txt.join('\n'); $('#report').hidden = false; return;
+    }
+    var grid = el('div', null, 'sumstats four');
+    var cells = [[hm(r.ms), L('שעות ריכוז', 'Focus hours')], [r.rounds, L('סבבים', 'Rounds')], [r.done.length, L('משימות הושלמו', 'Tasks done')],
+      S.goal > 0 ? [r.goalDays + '/' + r.worked, L('ימים ביעד', 'Days on goal')] : [r.worked, L('ימי עבודה', 'Days worked')]];
+    cells.forEach(function (c) { var s = el('div', null, 'stat'); s.appendChild(el('b', String(c[0]))); s.appendChild(el('span', c[1])); grid.appendChild(s); });
+    body.appendChild(grid);
+    txt.push('⏱ ' + L('זמן ריכוז: ', 'Focus time: ') + hm(r.ms), '🍅 ' + L('סבבים: ', 'Rounds: ') + r.rounds, '✅ ' + L('משימות שהושלמו: ', 'Tasks done: ') + r.done.length);
+    if (S.goal > 0) txt.push('🎯 ' + L('ימים שהגעת ליעד: ', 'Days you hit the goal: ') + r.goalDays + L(' מתוך ', ' of ') + r.worked + L(' ימי עבודה', ' work days'));
+    function line(text, cls) { body.appendChild(el('p', text, cls)); txt.push(text); }
+    if (r.prevMs >= 60000) {
+      var pct = Math.round((r.ms - r.prevMs) / r.prevMs * 100);
+      line((pct >= 0 ? L('📈 ' + pct + '% יותר מהשבוע שלפניו', '📈 ' + pct + '% more than the week before') : L('📉 ' + (-pct) + '% פחות מהשבוע שלפניו', '📉 ' + (-pct) + '% less than the week before')) + ' (' + hm(r.prevMs) + ')', pct >= 0 ? 'trend-up' : 'trend-down');
+    }
+    if (r.best) line('🏆 ' + L('היום הכי טוב: יום ', 'Best day: ') + dayName(r.best.w) + ' ' + shortDate(r.best.k) + ' (' + hm(r.best.ms) + ')');
+    if (r.worked) line('⚖️ ' + L('ממוצע ליום עבודה: ', 'Average per work day: ') + hm(r.ms / r.worked));
+    if (r.longest && r.longest.ms >= 60000) line('🐘 ' + L('המשימה הכי ארוכה: ', 'Longest task: ') + r.longest.text + ' (' + hm(r.longest.ms) + ')');
+    if (r.estN) line('🔮 ' + L('הערכות: ' + r.estOk + ' מתוך ' + r.estN + ' משימות הסתיימו בתוך מספר העגבניות שהערכת', 'Estimates: ' + r.estOk + ' of ' + r.estN + ' tasks finished within the rounds you estimated'));
+    function bars(head, rows) {
+      body.appendChild(el('h3', head)); txt.push('', head + ':');
+      var max = rows.reduce(function (m, x) { return Math.max(m, x[1]); }, 0) || 1;
+      rows.forEach(function (x) {
+        var row = el('div', null, 'rbar'), tr = el('div', null, 'track'), i = el('i');
+        i.style.width = Math.round(x[1] / max * 100) + '%'; if (x[2]) i.style.background = x[2];
+        tr.appendChild(i); row.appendChild(el('span', x[0], 'lbl')); row.appendChild(tr); row.appendChild(el('span', x[1] >= 30000 ? hm(x[1]) : '·', 'v'));
+        body.appendChild(row); txt.push('  ' + x[0] + '  ' + (x[1] >= 30000 ? hm(x[1]) : '-'));
+      });
+    }
+    bars(L('לפי ימים', 'By day'), r.days.map(function (d) { return [dayName(d.w) + ' ' + shortDate(d.k), d.ms]; }));
+    var tags = Object.keys(r.tags).filter(function (g) { return r.tags[g] >= 60000; }).sort(function (a, b) { return r.tags[b] - r.tags[a]; }).slice(0, 6);
+    if (tags.length) bars(L('לפי תגיות', 'By tag'), tags.map(function (g) { return [tagLabel(g), r.tags[g], g ? tagColor(S.tagNames[g] || g) : '']; }));
+    repText = txt.join('\n');
+    $('#report').hidden = false;
+  }
+  function showPendingReport() {
+    if (!reportPending || !$('#summary').hidden || !$('#askTime').hidden || !$('#report').hidden) return;
+    reportPending = false; openReport(1);
+  }
+  function mailReport() {
+    var url = 'https://mail.google.com/mail/?view=cm&fs=1' + (S.mail ? '&to=' + encodeURIComponent(S.mail) : '') +
+      '&su=' + encodeURIComponent(repSubject) + '&body=' + encodeURIComponent(repText);
+    if (window.focusApp && window.focusApp.openMail) window.focusApp.openMail(url);
+    else window.open(url, '_blank', 'noopener');
+    if (!S.mail) toast(L('טיפ: אפשר לשמור את המייל שלך בהגדרות, והוא ימולא לבד.', 'Tip: save your email in Settings and it fills in by itself.'));
+  }
+  function copyReport() {
+    function done() { toast(L('הדוח הועתק. אפשר להדביק אותו במייל.', 'Report copied. Paste it into an email.')); }
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = repText; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      ta.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(repText).then(done, fallback); else fallback();
+  }
+
+  /* ---------- display size ---------- */
+  function applyZoom() {
+    S.zoom = Math.round(Math.min(1.6, Math.max(0.7, S.zoom || 1)) * 10) / 10;
+    if (window.focusApp && window.focusApp.setZoom) window.focusApp.setZoom(S.zoom);
+    else document.documentElement.style.zoom = S.zoom === 1 ? '' : S.zoom;
+    var v = $('#zoomVal'); if (v) v.textContent = Math.round(S.zoom * 100) + '%';
+  }
+  function zoomBy(step) { S.zoom = step ? (S.zoom || 1) + step : 1; applyZoom(); save(); }
   function applyTheme() {
     if (S.theme === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', S.theme);
@@ -1647,7 +1874,7 @@ table.week td.zero { color: var(--line); }
     var keep = [];
     S.tasks.forEach(function (t) {
       if (t.done && t.repeat) { renewRepeat(t, true); keep.push(t); }
-      else if (t.done) S.history.push({ text: t.text, tags: tagsOf(t).slice(), doneAt: t.doneAt || 0, ms: t.ms || 0 });
+      else if (t.done) S.history.push({ text: t.text, tags: tagsOf(t).slice(), doneAt: t.doneAt || 0, ms: t.ms || 0, est: t.est || 0, pomos: t.pomos || 0 });
       else keep.push(t);
     });
     S.tasks = keep;
@@ -1746,11 +1973,38 @@ table.week td.zero { color: var(--line); }
     archiveDone();
     ensureCurrent(); save(); paintAll();
   };
-  $('#clearAll').onclick = openSummary;
-  $('#sumGo').onclick = newDay;
-  $('#sumCancel').onclick = function () { $('#summary').hidden = true; };
-  $('#summary').addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#summary').hidden = true; });
-  $('#summary').addEventListener('click', function (e) { if (e.target === this) this.hidden = true; });
+  $('#sumGo').onclick = closeSummary;
+  $('#summary').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSummary(); });
+  $('#summary').addEventListener('click', function (e) { if (e.target === this) closeSummary(); });
+  $('#askSkip').onclick = closeAsk;
+  $('#askSave').onclick = function () { var m = parseInt($('#askMin').value, 10); if (m > 0) setTaskTime(Math.min(600, m)); else $('#askMin').focus(); };
+  $('#askMin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#askSave').click(); });
+  $('#askTime').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAsk(); });
+  $('#askTime').addEventListener('click', function (e) { if (e.target === this) closeAsk(); });
+  $('#reportBtn').onclick = function () { openReport(1); };
+  $('#repPrev').onclick = function () { openReport(repBack + 1); };
+  $('#repNext').onclick = function () { openReport(repBack - 1); };
+  $('#repMail').onclick = mailReport;
+  $('#repCopy').onclick = copyReport;
+  $('#repClose').onclick = function () { $('#report').hidden = true; };
+  $('#report').addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#report').hidden = true; });
+  $('#report').addEventListener('click', function (e) { if (e.target === this) this.hidden = true; });
+  $('#zoomIn').onclick = function () { zoomBy(0.1); };
+  $('#zoomOut').onclick = function () { zoomBy(-0.1); };
+  $('#zoomVal').onclick = function () { zoomBy(0); };
+  // Ctrl + / Ctrl - / Ctrl 0 change the display size (by key position, so any keyboard layout works).
+  document.addEventListener('keydown', function (e) {
+    if (!e.ctrlKey || e.altKey || recording) return;
+    var c = e.code;
+    if (c === 'Equal' || c === 'NumpadAdd') { e.preventDefault(); zoomBy(0.1); }
+    else if (c === 'Minus' || c === 'NumpadSubtract') { e.preventDefault(); zoomBy(-0.1); }
+    else if (c === 'Digit0' || c === 'Numpad0') { e.preventDefault(); zoomBy(0); }
+  });
+  $('#mailIn').onchange = function () {
+    var v = this.value.trim();
+    S.mail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? v : '';
+    this.value = S.mail; save();
+  };
 
   $('#noteBtn').onclick = function () { openQuick(false); };
   $('#quickIn').addEventListener('keydown', function (e) {
@@ -1863,8 +2117,9 @@ table.week td.zero { color: var(--line); }
   $('#workMin').value = S.work; $('#breakMin').value = S.brk; $('#lunchCustom').value = S.lunchMin || 45;
   $('#sortBy').value = S.sort || 'manual';
   $('#longMin').value = S.longMin; $('#longEvery').value = S.longEvery;
-  $('#goalIn').value = S.goal; $('#soundSel').value = S.sound; $('#volIn').value = S.vol; $('#themeSel').value = S.theme; $('#langSel').value = S.lang;
+  $('#goalIn').value = S.goal; $('#soundSel').value = S.sound; $('#volIn').value = S.vol; $('#themeSel').value = S.theme; $('#langSel').value = S.lang; $('#mailIn').value = S.mail;
   applyTheme();
+  applyZoom();
   translateStatic();
   paintFloatBtn();
   // The desktop app has no use for "keep screen on" or "float above windows": website only.
