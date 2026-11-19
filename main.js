@@ -172,16 +172,21 @@ function holdOverlays(ms) {
   if (!rainOn) overlayTimer = setTimeout(closeOverlays, ms);
 }
 
+// Sound volume for the effects (0 when the page's sound is off), from the page's status.
+function effectVolume() { return status.vol == null ? 70 : Math.max(0, Math.min(100, +status.vol || 0)); }
+
 function burstConfetti(big) {
   ensureOverlays();
   toOverlays('burst', !!big);
+  // One sound, from the main screen only, even when confetti covers several screens.
+  toOverlays('sound', { kind: big ? 'popBig' : 'pop', vol: effectVolume() }, screen.getPrimaryDisplay().id);
   holdOverlays(8000);
 }
 
 function throwTomato() {
   ensureOverlays();
   const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  toOverlays('splat', null, d.id); // on the screen where the pointer is
+  toOverlays('splat', { vol: effectVolume() }, d.id); // on the screen where the pointer is
   holdOverlays(9000);
 }
 
@@ -199,6 +204,71 @@ function setRain(mode) {
     toOverlays('rain', false);
     holdOverlays(13000);
   }
+}
+
+// ---- the window in front, for spotting distractions during a focus round ----
+// A small PowerShell loop reports the program and title of the window in front, only when
+// it changes, every 3 seconds. It runs during focus rounds (and a minute after, so a short
+// pause does not restart it), and exits by itself if the app is gone.
+const { spawn } = require('child_process');
+let watcher = null;
+let watcherStop = null;
+function watcherScript() {
+  return [
+    "$ErrorActionPreference = 'SilentlyContinue'",
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; using System.Text; public static class FgWin { [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid); }'",
+    '$owner = ' + process.pid,
+    '$last = $null',
+    'while ($true) {',
+    '  if (-not (Get-Process -Id $owner -ErrorAction SilentlyContinue)) { exit }',
+    '  $h = [FgWin]::GetForegroundWindow()',
+    '  $sb = New-Object System.Text.StringBuilder 512',
+    '  [void][FgWin]::GetWindowText($h, $sb, 512)',
+    '  $procId = [uint32]0',
+    '  [void][FgWin]::GetWindowThreadProcessId($h, [ref]$procId)',
+    "  $name = ''",
+    '  $p = Get-Process -Id $procId -ErrorAction SilentlyContinue',
+    '  if ($p) { $name = $p.ProcessName }',
+    "  $line = $name + [char]9 + ($sb.ToString() -replace '[\\r\\n\\t]', ' ')",
+    '  if ($line -ne $last) { [Console]::Out.WriteLine($line); [Console]::Out.Flush(); $last = $line }',
+    '  Start-Sleep -Seconds 3',
+    '}'
+  ].join('\n');
+}
+function startWatcher() {
+  clearTimeout(watcherStop);
+  watcherStop = null;
+  if (watcher || process.platform !== 'win32') return;
+  try {
+    watcher = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+      '-EncodedCommand', Buffer.from(watcherScript(), 'utf16le').toString('base64')],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch (e) { watcher = null; return; }
+  const me = watcher;
+  let buf = '';
+  me.stdout.setEncoding('utf8');
+  me.stdout.on('data', (chunk) => {
+    buf += chunk;
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).replace(/\r$/, '');
+      buf = buf.slice(i + 1);
+      const tab = line.indexOf('\t');
+      send('window', { proc: tab >= 0 ? line.slice(0, tab) : '', title: (tab >= 0 ? line.slice(tab + 1) : line).slice(0, 300) });
+    }
+  });
+  me.on('exit', () => { if (watcher === me) watcher = null; });
+  me.on('error', () => { if (watcher === me) watcher = null; });
+}
+function stopWatcher() {
+  clearTimeout(watcherStop);
+  watcherStop = null;
+  if (watcher) { try { watcher.kill(); } catch (e) {} watcher = null; }
+}
+function stopWatcherSoon() {
+  if (!watcher || watcherStop) return;
+  watcherStop = setTimeout(stopWatcher, 60000);
 }
 
 function createWindow() {
@@ -321,7 +391,25 @@ ipcMain.handle('file:saveCsv', async (e, name, text) => {
 });
 
 ipcMain.on('status:set', (e, st) => {
-  if (st && typeof st === 'object') { status = st; applyStatus(); buildTrayMenu(); }
+  if (st && typeof st === 'object') {
+    status = st; applyStatus(); buildTrayMenu();
+    if (st.mode === 'work' && st.running && st.watch) startWatcher(); else stopWatcherSoon();
+  }
+});
+// A distraction squashed the round's tomato: throw one at the screen.
+ipcMain.on('tomato:throw', () => throwTomato());
+// A big message in the middle of every screen, over whatever you are doing.
+ipcMain.on('effects:message', (e, m) => {
+  if (!m || typeof m.text !== 'string') return;
+  const msg = {
+    text: m.text.slice(0, 120),
+    sub: typeof m.sub === 'string' ? m.sub.slice(0, 200) : '',
+    icon: ['wilt', 'splat', 'brk'].indexOf(m.icon) > -1 ? m.icon : '',
+    ms: Math.min(15000, Math.max(2000, +m.ms || 6000))
+  };
+  ensureOverlays();
+  toOverlays('message', msg);
+  holdOverlays(msg.ms + 1500);
 });
 
 ipcMain.handle('float:set', (e, on) => {
@@ -366,7 +454,7 @@ if (!app.requestSingleInstanceLock()) {
     app.on('activate', () => { if (!win) createWindow(); });
   });
   app.on('before-quit', () => { quitting = true; });
-  app.on('will-quit', () => globalShortcut.unregisterAll());
+  app.on('will-quit', () => { globalShortcut.unregisterAll(); stopWatcher(); });
   app.on('window-all-closed', () => app.quit());
 }
 

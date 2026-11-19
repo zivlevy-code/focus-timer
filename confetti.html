@@ -7,10 +7,29 @@
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+  /* A big message in the middle of every screen (distraction warning, squashed tomato, break reminder). */
+  #msg { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.6); opacity: 0; pointer-events: none;
+    transition: opacity .35s ease, transform .45s cubic-bezier(.2, 1.5, .4, 1);
+    background: rgba(18, 22, 30, .93); color: #fff; border: 5px solid #E5402B; border-radius: 32px;
+    padding: 30px 48px 34px; text-align: center; max-width: 80vw; box-shadow: 0 24px 70px rgba(0, 0, 0, .5);
+    font-family: "Segoe UI", "Assistant", Arial, sans-serif; }
+  #msg.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #msg.calm { border-color: #2FA97C; }
+  #msg.low { top: 84%; }
+  #msg .ico { font-size: 110px; line-height: 1.1; display: inline-block; }
+  #msg.show .ico { animation: wobble .6s ease-in-out 3; }
+  #msg.wilt .ico { filter: grayscale(.85); transform: rotate(28deg); }
+  #msg.show.wilt .ico { animation: droop 1.6s ease-in-out infinite; }
+  #msg .t { font-size: 40px; font-weight: 800; margin-top: 8px; }
+  #msg .sub { font-size: 22px; opacity: .85; margin-top: 10px; }
+  @keyframes wobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
+  @keyframes droop { 0%, 100% { transform: rotate(22deg); } 50% { transform: rotate(34deg) translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) { #msg, #msg .ico { animation: none !important; transition: opacity .2s; } }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="msg" aria-live="assertive"><span class="ico"></span><div class="t"></div><div class="sub"></div></div>
 <script>
 (function () {
   var cv = document.getElementById('c'), cx = cv.getContext('2d'), raf = 0;
@@ -110,25 +129,119 @@
   }
 
   /* ---------- one tomato, thrown at the middle of the screen, and squashed ---------- */
-  function squish() {
+  /* ---------- sounds: bright and sharp, so they are heard over music ---------- */
+  var VOL = 0.7;
+  function audio() {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function noiseBuf(sec, curve) {
+    var n = Math.floor(ac.sampleRate * sec), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, curve);
+    return buf;
+  }
+  function noise(t, sec, curve, type, freq, q, gain) {
+    var src = ac.createBufferSource(); src.buffer = noiseBuf(sec, curve);
+    var f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q) f.Q.value = q;
+    var g = ac.createGain(); g.gain.value = gain * VOL;
+    src.connect(f); f.connect(g); g.connect(ac.destination); src.start(t);
+    return f;
+  }
+  function tone(t, freq, type, len, peak) {
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak * VOL), t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + len + 0.02);
+  }
+  // The tomato flying in: a slide whistle (a pure tone with a little vibrato, gliding up).
+  function whoosh(sec) {
+    if (!VOL) return;
     try {
-      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-      var n = Math.floor(ac.sampleRate * 0.2), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
-      for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.2);
-      var src = ac.createBufferSource(); src.buffer = buf;
-      var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700;
-      var g = ac.createGain(); g.gain.value = 0.55;
-      src.connect(lp); lp.connect(g); g.connect(ac.destination); src.start();
-      var o = ac.createOscillator(), og = ac.createGain();
-      o.frequency.setValueAtTime(140, ac.currentTime); o.frequency.exponentialRampToValueAtTime(45, ac.currentTime + 0.14);
-      og.gain.setValueAtTime(0.5, ac.currentTime); og.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.16);
-      o.connect(og); og.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.18);
+      audio();
+      var t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+      var lfo = ac.createOscillator(), depth = ac.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(650, t); o.frequency.exponentialRampToValueAtTime(2300, t + sec);
+      lfo.frequency.value = 11; depth.gain.value = 28; lfo.connect(depth); depth.connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.32 * VOL, t + 0.04);
+      g.gain.setValueAtTime(0.32 * VOL, t + sec - 0.06); g.gain.exponentialRampToValueAtTime(0.0001, t + sec);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t); lfo.start(t); o.stop(t + sec + 0.02); lfo.stop(t + sec + 0.02);
+      noise(t, sec, 0.1, 'bandpass', 2600, 3, 0.05); // a breath of air in the whistle
     } catch (e) {}
   }
-  function throwTomato() {
+  // The splat: a low thump, a wet crack and a splash.
+  function squish() {
+    if (!VOL) return;
+    try {
+      audio();
+      var t = ac.currentTime;
+      var o = ac.createOscillator(), og = ac.createGain();
+      o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.18);
+      og.gain.setValueAtTime(1.0 * VOL, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.connect(og); og.connect(ac.destination); o.start(t); o.stop(t + 0.25);
+      noise(t, 0.28, 2.4, 'bandpass', 1300, 0.9, 1.6);
+      noise(t + 0.02, 0.12, 3, 'highpass', 3500, 0, 0.7);
+      noise(t + 0.06, 0.4, 1.6, 'lowpass', 900, 0, 0.5);
+    } catch (e) {}
+  }
+  // Confetti: applause and a cheering crowd, made from scratch (no sound files). Only noise,
+  // no buzzing tones: dense hand claps, a breathy "haaa" roar, and a couple of finger whistles.
+  function cheer(big) {
+    if (!VOL) return;
+    try {
+      audio();
+      var sr = ac.sampleRate, dur = big ? 3 : 1.8, n = Math.floor(sr * dur), t = ac.currentTime, i, v;
+      function env(x) { return Math.min(1, x / 0.15) * Math.min(1, (dur - x) / 0.9); } // swell in, fade out
+      // Applause: many short claps, each a little different.
+      var cb = ac.createBuffer(1, n, sr), c = cb.getChannelData(0);
+      var claps = Math.floor((big ? 120 : 95) * dur);
+      for (v = 0; v < claps; v++) {
+        var at = Math.random() * dur, c0 = Math.floor(at * sr), len = Math.floor((0.008 + Math.random() * 0.012) * sr);
+        var amp = (0.25 + Math.random() * 0.45) * env(at), tone = Math.random(), prev = 0;
+        for (i = 0; i < len && c0 + i < n; i++) {
+          var w = Math.random() * 2 - 1, s = tone * w + (1 - tone) * (w - prev); prev = w; // between dull and bright
+          c[c0 + i] += s * amp * Math.exp(-i / (0.003 * sr));
+        }
+      }
+      var cs = ac.createBufferSource(); cs.buffer = cb;
+      var chp = ac.createBiquadFilter(); chp.type = 'highpass'; chp.frequency.value = 700;
+      var cg = ac.createGain(); cg.gain.value = 0.9 * VOL;
+      cs.connect(chp); chp.connect(cg); cg.connect(ac.destination); cs.start(t);
+      // The crowd's roar: breathy noise shaped like an open "ah", rising and falling a little.
+      var rb = ac.createBuffer(1, n, sr), r = rb.getChannelData(0), wob = Math.random() * 6;
+      for (i = 0; i < n; i++) { var x = i / sr; r[i] = (Math.random() * 2 - 1) * env(x) * (0.8 + 0.2 * Math.sin(6.283 * 1.3 * x + wob)); }
+      var rs = ac.createBufferSource(); rs.buffer = rb;
+      var f1 = ac.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 750; f1.Q.value = 1.4;
+      var f2 = ac.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1250; f2.Q.value = 1.6;
+      var rg = ac.createGain(); rg.gain.value = 0.55 * VOL;
+      rs.connect(f1); rs.connect(f2); f1.connect(rg); f2.connect(rg); rg.connect(ac.destination); rs.start(t);
+      // Finger whistles from the crowd: "fweee-oo".
+      var whistles = big ? 3 : 1;
+      for (v = 0; v < whistles; v++) {
+        var w0 = t + 0.15 + Math.random() * (dur - 1), wl = 0.45 + Math.random() * 0.25, base = 1900 + Math.random() * 500;
+        var o = ac.createOscillator(), og = ac.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(base * 0.8, w0);
+        o.frequency.exponentialRampToValueAtTime(base * 1.25, w0 + wl * 0.35); o.frequency.exponentialRampToValueAtTime(base * 0.9, w0 + wl);
+        og.gain.setValueAtTime(0.0001, w0); og.gain.exponentialRampToValueAtTime(0.16 * VOL, w0 + 0.04);
+        og.gain.setValueAtTime(0.16 * VOL, w0 + wl - 0.08); og.gain.exponentialRampToValueAtTime(0.0001, w0 + wl);
+        o.connect(og); og.connect(ac.destination); o.start(w0); o.stop(w0 + wl + 0.02);
+      }
+    } catch (e) {}
+  }
+  function onSound(m) {
+    if (!m) return;
+    VOL = Math.max(0, Math.min(1, (m.vol == null ? 70 : +m.vol) / 100));
+    if (m.kind === 'pop' || m.kind === 'popBig') cheer(m.kind === 'popBig');
+  }
+  function throwTomato(m) {
+    if (m && m.vol != null) VOL = Math.max(0, Math.min(1, +m.vol / 100));
     var W = innerWidth, H = innerHeight;
+    // The flight starts on the first frame actually drawn, so a window that has only just
+    // appeared still shows the whole throw instead of jumping straight to the splat.
     flights.push({
-      t0: performance.now(), dur: 520,
+      t0: null, dur: 700,
       x0: W / 2 + (Math.random() - 0.5) * W * 0.3, y0: H * 1.08,
       cx: W / 2 + (Math.random() - 0.5) * W * 0.25, cy: H * 0.32,
       x1: W / 2, y1: H / 2, size: Math.min(W, H) * 0.17, spin: (Math.random() < 0.5 ? -1 : 1) * (2.5 + Math.random() * 2)
@@ -146,6 +259,7 @@
   }
   function drawFlights(now) {
     flights = flights.filter(function (f) {
+      if (f.t0 == null) { f.t0 = now; whoosh(f.dur / 1000); }
       var p = (now - f.t0) / f.dur;
       if (p >= 1) { makeSplat(f.x1, f.y1, f.size); return false; }
       var e = Math.pow(p, 1.15), u = 1 - e;
@@ -212,7 +326,26 @@
     if (!raf) cx.clearRect(0, 0, innerWidth, innerHeight);
   }
 
+  var msgTimer = 0, ICONS = { wilt: '🍅', splat: '💥', brk: '☕' };
+  function showMessage(m) {
+    if (!m || !m.text) return;
+    var el = document.getElementById('msg');
+    el.dir = /[֐-׿]/.test(m.text) ? 'rtl' : 'ltr';
+    el.querySelector('.ico').textContent = ICONS[m.icon] || '';
+    el.querySelector('.t').textContent = m.text;
+    el.querySelector('.sub').textContent = m.sub || '';
+    // A squash message sits lower, so the splat in the middle stays visible.
+    var base = (m.icon === 'wilt' ? 'wilt ' : '') + (m.icon === 'brk' ? 'calm ' : '') + (m.icon === 'splat' ? 'low ' : '');
+    el.className = base;
+    void el.offsetWidth; // restart the entrance animation
+    el.className = base + 'show';
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(function () { el.className = base; }, Math.min(15000, m.ms || 6000));
+  }
+
   if (window.confettiApp) {
+    if (window.confettiApp.onMessage) window.confettiApp.onMessage(showMessage);
+    if (window.confettiApp.onSound) window.confettiApp.onSound(onSound);
     window.confettiApp.onBurst(burst);
     window.confettiApp.onRain(setRain);
     window.confettiApp.onSplat(throwTomato);

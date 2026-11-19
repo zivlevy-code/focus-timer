@@ -218,6 +218,36 @@ table.week td.zero { color: var(--line); }
 .modal h2 { margin-bottom: 8px; }
 .modal ul { margin: 6px 0 12px; padding-inline-start: 20px; }
 .sumstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+/* game: badges, the tomato garden, icon buttons */
+.badges { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin: -12px 0 10px; min-height: 26px; }
+.badge { font-size: 13px; font-weight: 600; color: var(--muted); background: var(--soft); border-radius: 99px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+.badge.fire { color: #E8590C; }
+.badge .xp { width: 46px; height: 5px; border-radius: 99px; background: var(--line); overflow: hidden; display: inline-block; }
+.badge .xp i { display: block; height: 100%; background: var(--accent); }
+.garden { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 3px; margin: -8px auto 16px; max-width: 400px; min-height: 34px; padding: 4px 10px 3px; border-bottom: 3px solid #A1785A; border-radius: 0 0 8px 8px; }
+.garden[hidden] { display: none; }
+.garden.reached { border-bottom-color: var(--break); }
+.garden .tom { width: 28px; height: 28px; display: inline-grid; place-items: center; }
+.garden .tom svg { display: block; width: 28px; height: 28px; }
+.garden .slot::before { content: ''; width: 16px; height: 16px; border: 2px dashed var(--line); border-radius: 50%; }
+.garden .gold svg { filter: drop-shadow(0 0 4px #F2B33D); }
+.garden .grow svg { transform-origin: 50% 90%; transition: transform .6s linear; }
+.garden .grow.wilt svg { filter: grayscale(.85); }
+.garden .pop { animation: pop .7s ease-out; }
+.garden .count { font-size: 13px; color: var(--muted); align-self: center; margin-inline-start: 6px; font-variant-numeric: tabular-nums; }
+@keyframes pop { 0% { transform: scale(.2); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .garden .pop { animation: none; } .garden .grow svg { transition: none; } }
+.btn.ghost.ico { font-size: 20px; min-width: 46px; padding: 6px 10px; }
+.add-extra .lico { font-size: 16px; min-width: 18px; text-align: center; font-weight: 700; color: var(--muted); }
+.settings label.wide { flex-basis: 100%; }
+.settings label.wide input { width: 100%; }
+/* Chips that are empty or default show up only when you point at (or tab into) a task. */
+.task:not(:hover):not(:focus-within) .meta .empty,
+.task:not(:hover):not(:focus-within) .meta .tagedit,
+.task:not(:hover):not(:focus-within) .meta .mv,
+.task:not(:hover):not(:focus-within) .meta .pri-1,
+.task:not(:hover):not(:focus-within) .meta .dateinp.blank { display: none; }
+.meta:empty { display: none; }
 .zoomrow { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 .zoomrow .btn { min-height: 36px; padding: 2px 14px; font-size: 18px; border: 1px solid var(--line); }
 .zoomrow b { min-width: 52px; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -252,6 +282,7 @@ table.week td.zero { color: var(--line); }
 <body>
 <main>
   <div class="timer">
+    <div class="badges" id="badges"></div>
     <svg class="hero" id="hero" viewBox="0 0 64 64" width="72" height="72" aria-hidden="true" hidden>
       <ellipse cx="32" cy="37" rx="25" ry="22" fill="#E5402B"/>
       <ellipse cx="22" cy="31" rx="6" ry="3.5" transform="rotate(-35 22 31)" fill="#fff" opacity=".38"/>
@@ -262,18 +293,17 @@ table.week td.zero { color: var(--line); }
     <p class="digits" id="digits">25:00</p>
     <p class="current" id="current"></p>
     <div class="bar" aria-hidden="true"><i id="bar"></i></div>
-    <p class="goal" id="goal" hidden></p>
+    <div class="garden" id="garden" hidden></div>
     <div class="row">
       <button class="btn primary" id="startBtn">התחל זמן עבודה</button>
-      <button class="btn" id="finishBtn">סיימתי את המשימה</button>
+      <button class="btn" id="finishBtn" title="סיימתי את המשימה">✓ סיימתי</button>
     </div>
     <div class="row" style="margin-top:6px">
-      <button class="btn ghost" id="skipBtn" hidden>דלג על ההפסקה</button>
-      <button class="btn ghost" id="lunchBtn">הפסקת צהריים</button>
-      <button class="btn ghost" id="noteBtn" title="לרשום מחשבה צדדית ל-Backlog בלי לעצור את הטיימר">💭 פתק מהיר</button>
+      <button class="btn ghost ico" id="skipBtn" hidden title="דלג על ההפסקה" aria-label="דלג על ההפסקה">⏭</button>
+      <button class="btn ghost ico" id="lunchBtn" title="הפסקת צהריים" aria-label="הפסקת צהריים">🍽️</button>
       <button class="btn ghost" id="wakeBtn" aria-pressed="false">השאר מסך דלוק</button>
       <button class="btn ghost" id="floatBtn" hidden>צף מעל החלונות</button>
-      <button class="btn ghost" id="resetBtn">אפס טיימר</button>
+      <button class="btn ghost ico" id="resetBtn" title="אפס טיימר" aria-label="אפס טיימר">↺</button>
     </div>
     <p class="note" id="wakeNote" aria-live="polite"></p>
     <div class="choice" id="lunchPanel" hidden>
@@ -317,27 +347,27 @@ table.week td.zero { color: var(--line); }
       <button class="btn" id="addBlBtn" title="להוסיף ל-Backlog, בלי להתחייב להיום">ל-Backlog</button>
     </div>
     <div class="add-extra">
-      <label>דחיפות
-        <select id="newPri">
+      <label><span class="lico" aria-hidden="true">⚡</span>
+        <select id="newPri" title="דחיפות" aria-label="דחיפות">
           <option value="0">נמוכה</option>
           <option value="1" selected>רגילה</option>
           <option value="2">גבוהה</option>
         </select>
       </label>
-      <label>תאריך הגשה <input type="date" id="newDue"></label>
-      <label>תגית
-        <select id="newTag"><option value="">ללא תגית</option></select>
+      <label><span class="lico" aria-hidden="true">📅</span> <input type="date" id="newDue" title="תאריך הגשה" aria-label="תאריך הגשה"></label>
+      <label><span class="lico" aria-hidden="true">#</span>
+        <select id="newTag" title="תגית" aria-label="תגית"><option value="">ללא תגית</option></select>
         <input type="text" id="newTagName" placeholder="שם התגית" maxlength="30" aria-label="שם התגית החדשה" hidden>
       </label>
-      <label>הערכה
-        <select id="newEst">
+      <label><span class="lico" aria-hidden="true">🍅</span>
+        <select id="newEst" title="הערכה" aria-label="הערכה">
           <option value="">—</option>
           <option value="1">🍅 1</option><option value="2">🍅 2</option><option value="3">🍅 3</option><option value="4">🍅 4</option>
           <option value="5">🍅 5</option><option value="6">🍅 6</option><option value="8">🍅 8</option><option value="10">🍅 10</option>
         </select>
       </label>
-      <label>חוזרת
-        <select id="newRepeat">
+      <label><span class="lico" aria-hidden="true">🔁</span>
+        <select id="newRepeat" title="חוזרת" aria-label="חוזרת">
           <option value="">לא</option>
           <option value="daily">כל יום</option>
           <option value="weekdays">ימי חול (א׳–ה׳)</option>
@@ -397,6 +427,7 @@ table.week td.zero { color: var(--line); }
       <label>צליל
         <select id="soundSel">
           <option value="bell">פעמון</option>
+          <option value="loud">חד (נשמע גם מעל מוזיקה)</option>
           <option value="soft">רך</option>
           <option value="none">ללא צליל</option>
         </select>
@@ -422,6 +453,8 @@ table.week td.zero { color: var(--line); }
         <button class="btn ghost" id="zoomIn" aria-label="הגדל">+</button>
       </div>
       <label>המייל שלך, לדוח השבועי <input type="email" id="mailIn" dir="ltr" style="width:230px" placeholder="name@gmail.com"></label>
+      <label class="check app-only" style="display:none"><input type="checkbox" id="distractOn"> 🕵️ זיהוי הסחות דעת בזמן סבב</label>
+      <label class="app-only wide" style="display:none">אתרים ותוכנות מסיחים (מופרדים בפסיק) <input type="text" id="distractIn" dir="ltr"></label>
       <label class="check app-only" style="display:none"><input type="checkbox" id="autoStart"> הפעל עם הדלקת המחשב</label>
       <button class="btn ghost" id="clearDone">נקה משימות שהושלמו</button>
       <span id="fileTools" style="display:none">
@@ -484,7 +517,7 @@ table.week td.zero { color: var(--line); }
 (function () {
   var KEY = 'focus-timer-v1';
   var $ = function (s) { return document.querySelector(s) || (pipWin && pipWin.document.querySelector(s)); };
-  var S = { tasks: [], currentId: null, mode: 'idle', running: false, remaining: 25 * 60000, lastTick: 0, pomos: 0, work: 25, brk: 5, choosing: false, history: [], cycles: 0, longMin: 15, longEvery: 4, tagColors: {}, tagNames: {}, tagFilter: '__all', backlogOpen: false, log: {}, goal: 8, sound: 'bell', vol: 70, theme: 'auto', lastDay: '', dueNotified: '', lang: 'he', zoom: 1, mail: '', reportWeek: '' };
+  var S = { tasks: [], currentId: null, mode: 'idle', running: false, remaining: 25 * 60000, lastTick: 0, pomos: 0, work: 25, brk: 5, choosing: false, history: [], cycles: 0, longMin: 15, longEvery: 4, tagColors: {}, tagNames: {}, tagFilter: '__all', backlogOpen: false, log: {}, goal: 8, sound: 'bell', vol: 70, theme: 'auto', lastDay: '', dueNotified: '', lang: 'he', zoom: 1, mail: '', reportWeek: '', xp: null, distractOn: true, distractList: null, round: null, pausedAt: 0, brkWatch: null };
 
   function load() {
     try {
@@ -508,7 +541,7 @@ table.week td.zero { color: var(--line); }
       S.tasks.forEach(function (t) { t.tags = uniqueTags(tagsOf(t)); });
       S.log = o.log && typeof o.log === 'object' ? o.log : {};
       S.goal = o.goal == null ? 8 : Math.min(30, Math.max(0, +o.goal || 0));
-      S.sound = ['bell', 'soft', 'none'].indexOf(o.sound) > -1 ? o.sound : 'bell';
+      S.sound = ['bell', 'loud', 'soft', 'none'].indexOf(o.sound) > -1 ? o.sound : 'bell';
       S.vol = o.vol == null ? 70 : Math.min(100, Math.max(5, +o.vol || 70));
       S.theme = ['auto', 'light', 'dark'].indexOf(o.theme) > -1 ? o.theme : 'auto';
       S.lastDay = typeof o.lastDay === 'string' ? o.lastDay : '';
@@ -517,6 +550,12 @@ table.week td.zero { color: var(--line); }
       S.zoom = Math.min(1.6, Math.max(0.7, +o.zoom || 1));
       S.mail = typeof o.mail === 'string' ? o.mail : '';
       S.reportWeek = typeof o.reportWeek === 'string' ? o.reportWeek : '';
+      S.xp = o.xp == null ? null : Math.max(0, +o.xp || 0);
+      S.distractOn = o.distractOn !== false;
+      S.distractList = Array.isArray(o.distractList) ? o.distractList.filter(function (x) { return typeof x === 'string' && x.trim(); }).map(function (x) { return x.trim(); }).slice(0, 60) : null;
+      S.round = o.round && typeof o.round === 'object' ? o.round : null;
+      S.pausedAt = +o.pausedAt || 0;
+      S.brkWatch = o.brkWatch && typeof o.brkWatch === 'object' ? o.brkWatch : null;
     } catch (e) {}
     S.remaining = S.work * 60000;
   }
@@ -551,7 +590,7 @@ table.week td.zero { color: var(--line); }
     'דקות הפסקה': 'Break minutes', 'הפסקה ארוכה (דקות, 0 לכיבוי)': 'Long break (minutes, 0 = off)',
     'הפסקה ארוכה כל (סבבים)': 'Long break every (rounds)', 'השהיה אוטומטית אחרי (דקות, 0 לכיבוי)': 'Auto pause after (minutes idle, 0 = off)',
     'יעד סבבים ביום (0 לכיבוי)': 'Daily goal in rounds (0 = off)', 'צליל': 'Sound', 'פעמון': 'Bell', 'רך': 'Soft',
-    'ללא צליל': 'No sound', 'עוצמה': 'Volume', 'השמע צליל': 'Play sound', 'מראה': 'Theme', 'לפי Windows': 'Follow Windows',
+    'ללא צליל': 'No sound', 'חד (נשמע גם מעל מוזיקה)': 'Sharp (heard over music)', 'עוצמה': 'Volume', 'השמע צליל': 'Play sound', 'מראה': 'Theme', 'לפי Windows': 'Follow Windows',
     'בהיר': 'Light', 'כהה': 'Dark', 'הפעל עם הדלקת המחשב': 'Start with Windows', 'נקה משימות שהושלמו': 'Clear finished tasks',
     'התחל יום חדש': 'Start a new day', 'פתח את קובץ המשימות': 'Open the tasks file', 'תיקיית הנתונים': 'Data folder',
     '💭 מה עלה לך בראש?': "💭 What's on your mind?", 'Enter שומר ל-Backlog · Esc סוגר': 'Enter saves to backlog · Esc closes',
@@ -567,11 +606,13 @@ table.week td.zero { color: var(--line); }
     'הגדלה, הקטנה או גודל רגיל של התצוגה.': 'Make the display larger, smaller, or back to normal.',
     'בוקר טוב! המשימות שהושלמו עברו להיסטוריה ומונה הסבבים התאפס. יום חדש מתחיל כל בוקר ב-4:00.': 'Good morning! Finished tasks moved to history and the round counter was reset. A new day starts every morning at 4:00.',
     'בוא נתחיל': "Let's go", 'כמה זמן זה לקח?': 'How long did it take?', 'או בדקות': 'Or in minutes', 'שמור': 'Save', 'דלג': 'Skip',
-    '✉️ שלח לי ב-Gmail': '✉️ Send to me in Gmail', 'העתק': 'Copy', 'סגור': 'Close'
+    '✉️ שלח לי ב-Gmail': '✉️ Send to me in Gmail', 'העתק': 'Copy', 'סגור': 'Close', '✓ סיימתי': '✓ Done',
+    '🕵️ זיהוי הסחות דעת בזמן סבב': '🕵️ Spot distractions during a round',
+    'אתרים ותוכנות מסיחים (מופרדים בפסיק)': 'Distracting sites and programs (comma separated)'
   };
   var origText = new WeakMap(), origAttr = new WeakMap();
   // Parts filled in by code (task names, tags, history...) are never run through EN.
-  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn,#sumTitle,#askTask,#askTomatoes,#repTitle,#repBody,#repPrev,#repNext,#zoomVal';
+  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn,#sumTitle,#askTask,#askTomatoes,#repTitle,#repBody,#repPrev,#repNext,#zoomVal,#garden,#badges';
   function isDynamic(el) { return !!(el && el.closest && el.closest(DYNAMIC)); }
   function translateStatic() {
     var en = S.lang === 'en';
@@ -594,7 +635,7 @@ table.week td.zero { color: var(--line); }
   }
   function save() {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ tasks: S.tasks, pomos: S.pomos, work: S.work, brk: S.brk, lunchMin: S.lunchMin, idleMin: S.idleMin, longMin: S.longMin, longEvery: S.longEvery, cycles: S.cycles, tagColors: S.tagColors, history: S.history, wake: wakeOn, sort: S.sort || 'manual', currentId: S.currentId, log: S.log, goal: S.goal, sound: S.sound, vol: S.vol, theme: S.theme, lastDay: S.lastDay, dueNotified: S.dueNotified, lang: S.lang, zoom: S.zoom, mail: S.mail, reportWeek: S.reportWeek }));
+      localStorage.setItem(KEY, JSON.stringify({ tasks: S.tasks, pomos: S.pomos, work: S.work, brk: S.brk, lunchMin: S.lunchMin, idleMin: S.idleMin, longMin: S.longMin, longEvery: S.longEvery, cycles: S.cycles, tagColors: S.tagColors, history: S.history, wake: wakeOn, sort: S.sort || 'manual', currentId: S.currentId, log: S.log, goal: S.goal, sound: S.sound, vol: S.vol, theme: S.theme, lastDay: S.lastDay, dueNotified: S.dueNotified, lang: S.lang, zoom: S.zoom, mail: S.mail, reportWeek: S.reportWeek, xp: S.xp, distractOn: S.distractOn, distractList: S.distractList, round: S.round, pausedAt: S.pausedAt, brkWatch: S.brkWatch }));
     } catch (e) {}
     syncFile();
   }
@@ -704,7 +745,7 @@ table.week td.zero { color: var(--line); }
     var meta = document.createElement('div'); meta.className = 'meta';
     var p = priOf(t);
     var pb = document.createElement('button'); pb.className = 'chip pri-' + p;
-    pb.textContent = L('דחיפות: ', 'Priority: ') + priName(p);
+    pb.textContent = ['💤 ', '⚡ ', '🔥 '][p] + priName(p);
     pb.setAttribute('aria-label', L('דחיפות ', 'Priority ') + priName(p) + L(', לחצו לשינוי', ', click to change'));
     pb.onclick = function () { t.pri = (priOf(t) + 1) % 3; save(); paintAll(); };
     var info = dueInfo(dueOf(t));
@@ -714,7 +755,7 @@ table.week td.zero { color: var(--line); }
     if (t.repeat !== 'daily') {
       var di = document.createElement('input'); di.type = 'date'; di.value = t.due || '';
       di.setAttribute('aria-label', L('תאריך הגשה', 'Due date'));
-      di.className = 'dateinp'; di.title = L('תאריך הגשה', 'Due date');
+      di.className = 'dateinp' + (t.due ? '' : ' blank'); di.title = L('תאריך הגשה', 'Due date');
       di.onchange = function () { t.due = di.value || ''; save(); paintAll(); };
       meta.appendChild(di);
     }
@@ -742,7 +783,7 @@ table.week td.zero { color: var(--line); }
     nb.setAttribute('aria-expanded', openNotes[t.id] ? 'true' : 'false');
     nb.onclick = function () { openNotes[t.id] = !openNotes[t.id]; paintAll(); if (openNotes[t.id]) { var a = document.querySelector('[data-note="' + t.id + '"]'); if (a) a.focus(); } };
     meta.appendChild(nb);
-    var mv = document.createElement('button'); mv.className = 'chip';
+    var mv = document.createElement('button'); mv.className = 'chip mv';
     mv.textContent = secOf(t) === 'backlog' ? L('↑ להיום', '↑ To today') : L('↓ ל-Backlog', '↓ To backlog');
     mv.onclick = function () {
       t.section = secOf(t) === 'backlog' ? 'today' : 'backlog';
@@ -794,20 +835,26 @@ table.week td.zero { color: var(--line); }
   var ctx = null;
   // n notes starting at time t0, in the chosen sound and volume. keep: remember them so a
   // scheduled end sound can be cancelled.
+  var SOUNDS = {
+    bell: { step: 0.3, len: 1.2, peak: 0.5, notes: [1046.5, 784], waves: [['sine', 1, 1], ['sine', 2.76, 0.35], ['sine', 5.4, 0.12]] },
+    loud: { step: 0.18, len: 0.32, peak: 0.42, notes: [1568, 1318.5, 2093], waves: [['square', 1, 0.6], ['sine', 2, 0.5]] },
+    soft: { step: 0.34, len: 0.32, peak: 0.35, notes: [523.25, 392], waves: [['triangle', 1, 1]] }
+  };
   function playSeq(t0, n, keep) {
     if (!ctx || S.sound === 'none') return;
-    var soft = S.sound === 'soft', step = soft ? 0.34 : 0.22, len = soft ? 0.32 : 0.2;
-    var peak = 0.35 * S.vol / 100;
+    var sp = SOUNDS[S.sound] || SOUNDS.bell, v = S.vol / 100;
     for (var i = 0; i < n; i++) {
-      var o = ctx.createOscillator(), g = ctx.createGain(), t = t0 + i * step;
-      o.type = soft ? 'triangle' : 'sine';
-      o.frequency.value = soft ? (i % 2 ? 392 : 523.25) : (i % 2 ? 660 : 880);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(peak, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(t); o.stop(t + len + 0.01);
-      if (keep) sched.push(o);
+      var t = t0 + i * sp.step, f = sp.notes[i % sp.notes.length];
+      sp.waves.forEach(function (w) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = w[0]; o.frequency.value = f * w[1];
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0002, sp.peak * v * w[2]), t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + sp.len / (w[1] > 2 ? 2 : 1));
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t); o.stop(t + sp.len + 0.02);
+        if (keep) sched.push(o);
+      });
     }
   }
   function beep(times) {
@@ -940,9 +987,10 @@ table.week td.zero { color: var(--line); }
     S.remaining -= dt;
     if (S.mode === 'work') {
       var c = byId(S.currentId);
-      if (c) credit(c, used);
+      if (c && !distractedNow()) credit(c, used);
     }
     if (S.remaining <= 0) { phaseEnded(); return; }
+    paintGrowing();
     paintTimer(); paintTaskTime(); paintSummary();
     if (Math.floor(now / 5000) !== Math.floor((now - dt) / 5000)) save();
   }
@@ -965,7 +1013,8 @@ table.week td.zero { color: var(--line); }
   }
   function roundsToday() { var d = S.log[workDay(Date.now())]; return d ? (d.rounds || 0) : 0; }
   // A finished work round: counters, the task's rounds, and the daily goal.
-  function addRound(taskId) {
+  function addRound(taskId, score) {
+    plant('ok', { s: score == null ? null : score });
     S.pomos++;
     var c = byId(taskId || S.currentId);
     if (c) c.pomos = (c.pomos || 0) + 1;
@@ -975,18 +1024,6 @@ table.week td.zero { color: var(--line); }
       setTimeout(function () { confetti(true); toast(L('🎯 הגעת ליעד היומי: ' + S.goal + ' סבבים! כל הכבוד', '🎯 Daily goal reached: ' + S.goal + ' rounds! Well done')); notify(L('הגעת ליעד היומי 🎯', 'Daily goal reached 🎯')); }, 1500);
     }
   }
-  function paintGoal() {
-    var el = $('#goal'); if (!el) return;
-    el.hidden = !(S.goal > 0);
-    if (el.hidden) return;
-    var r = roundsToday();
-    el.className = 'goal' + (r >= S.goal ? ' reached' : '');
-    el.textContent = '';
-    el.appendChild(document.createTextNode(L('🎯 יעד יומי: ', '🎯 Daily goal: ')));
-    var b = document.createElement('b'); b.textContent = r + '/' + S.goal; el.appendChild(b);
-    el.appendChild(document.createTextNode(r >= S.goal ? L(' סבבים. הגעת ליעד!', ' rounds. Goal reached!') : L(' סבבים', ' rounds')));
-  }
-
   function nextBreak() {
     S.cycles = (S.cycles || 0) + 1;
     if (S.longMin > 0 && S.cycles >= S.longEvery) { S.cycles = 0; return { ms: S.longMin * 60000, long: true }; }
@@ -994,11 +1031,15 @@ table.week td.zero { color: var(--line); }
   }
   function phaseEnded() {
     if (S.mode === 'work') {
-      addRound();
-      confetti(true); if (!sched.length) beep(3); notify(L('הסבב הסתיים. זמן להפסקה 🍅', 'Round finished. Time for a break 🍅'));
+      var squashed = S.round && S.round.squashed;
+      if (!squashed) { addRound(null, roundScore()); confetti(true); }
+      S.round = null; S.pausedAt = 0;
+      if (!sched.length) beep(3); notify(L('הסבב הסתיים. זמן להפסקה 🍅', 'Round finished. Time for a break 🍅'));
       var nb = nextBreak();
       S.mode = 'break'; S.remaining = nb.ms; S.lastTick = Date.now(); S.running = true; S.curBreak = nb.ms; S.lunch = false; S.longBrk = nb.long; tomatoRain();
+      startBreakWatch();
     } else {
+      endBreakWatch();
       if (!sched.length) beep(2);
       notify(L('ההפסקה נגמרה. חוזרים לעבודה', 'Break is over. Back to work'));
       S.mode = 'idle'; S.remaining = S.work * 60000; S.running = false;
@@ -1013,13 +1054,20 @@ table.week td.zero { color: var(--line); }
     if (S.mode === 'idle') {
       if (!S.currentId) { nudge(); return; }
       S.mode = 'work'; S.remaining = S.work * 60000;
+      newRound();
     }
+    if (S.mode === 'work' && !S.round) newRound();
+    S.pausedAt = 0;
     S.choosing = false;
     S.running = true; S.lastTick = Date.now();
     if (S.mode === 'break' && !toms.length) tomatoRain();
     paintAll();
   }
-  function pause() { tick(); S.running = false; S.autoPaused = false; save(); paintAll(); }
+  function pause() {
+    tick(); S.running = false; S.autoPaused = false;
+    if (S.mode === 'work' && S.round && !S.round.squashed) { S.pausedAt = Date.now(); toast(L('⏸ העגבנייה מחכה. חזרה תוך 5 דקות שומרת עליה', '⏸ Your tomato is waiting. Come back within 5 minutes to keep it')); }
+    save(); paintAll();
+  }
 
   function finishTask() {
     ensureCurrent();
@@ -1028,7 +1076,7 @@ table.week td.zero { color: var(--line); }
     if (S.mode === 'work' && S.running) tick();
     c.done = true; c.doneAt = Date.now();
     S.finishedId = c.id;
-    confetti(false); beep(2);
+    confetti(false); if (!window.focusApp) beep(2);
     askTime(c);
     var next = firstOpen();
     if (S.mode === 'work' && S.remaining > 0) {
@@ -1042,8 +1090,11 @@ table.week td.zero { color: var(--line); }
 
   function takeEarlyBreak() {
     var nb = nextBreak();
+    var squashed = S.round && S.round.squashed, score = roundScore();
     S.choosing = false; S.mode = 'break'; S.remaining = nb.ms; S.running = true; S.lastTick = Date.now(); S.curBreak = nb.ms; S.lunch = false; S.longBrk = nb.long; tomatoRain();
-    addRound(S.finishedId); // the round belongs to the task that was just finished
+    if (!squashed) addRound(S.finishedId, score); // the round belongs to the task that was just finished
+    S.round = null; S.pausedAt = 0;
+    startBreakWatch();
     save(); paintAll();
   }
   function continueNext() {
@@ -1086,19 +1137,240 @@ table.week td.zero { color: var(--line); }
     if (!min) { $('#lunchCustom').focus(); return; }
     try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === 'suspended') ctx.resume(); } catch (e) {}
     if (S.running && S.mode === 'work') tick();
-    S.lunchMin = min; S.lunch = true; S.longBrk = false; S.choosing = false;
+    S.lunchMin = min; S.lunch = true; S.longBrk = false; S.choosing = false; S.round = null; S.pausedAt = 0; S.brkWatch = null;
     S.mode = 'break'; S.curBreak = min * 60000; S.remaining = min * 60000;
     S.running = true; S.lastTick = Date.now();
     $('#lunchPanel').hidden = true;
     tomatoRain(); save(); paintAll();
   }
   function skipBreak() {
+    S.brkWatch = null;
     S.mode = 'idle'; S.running = false; S.remaining = S.work * 60000; paintAll();
   }
   function resetTimer() {
     if (S.running) tick();
+    if (S.mode === 'work' && S.round && total() - S.remaining > 60000) squash('reset');
+    S.round = null; S.pausedAt = 0; S.brkWatch = null;
     S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000;
     save(); paintAll();
+  }
+
+  /* ---------- the tomato garden: a game layer over the rounds ---------- */
+  // Every finished round grows a tomato in today's garden (in the log, per working day).
+  // Giving up on a round squashes it: a reset midway, a pause of more than 5 minutes, or
+  // (app only) too long on a distracting site. A break really spent away from the screen
+  // earns a golden tomato. Tomatoes add up to levels; days on goal add up to a streak.
+  var PAUSE_SQUASH = 5 * 60000, DISTRACT_WARN = 20000, DISTRACT_SQUASH = 3 * 60000, BREAK_ACTIVE = 40000;
+  var DEFAULT_DISTRACT = ['facebook', 'youtube', 'instagram', 'tiktok', 'reddit', 'twitter', 'netflix', 'ynet', 'walla', 'וואלה', 'whatsapp'];
+  var LEVELS = [0, 10, 25, 50, 100, 200, 350, 500, 750, 1000];
+  var LEVEL_HE = ['זרע', 'נבט', 'שתיל', 'גנן מתחיל', 'גנן', 'חקלאי', 'חקלאי ותיק', 'מומחה עגבניות', 'מלך החממה', 'אגדת העגבניות'];
+  var LEVEL_EN = ['Seed', 'Sprout', 'Seedling', 'Beginner gardener', 'Gardener', 'Farmer', 'Seasoned farmer', 'Tomato expert', 'Greenhouse king', 'Tomato legend'];
+  function levelOf(xp) { var i = 0; while (i + 1 < LEVELS.length && xp >= LEVELS[i + 1]) i++; return i; }
+  function levelName(i) { return L(LEVEL_HE[i], LEVEL_EN[i]); }
+  function gardenOf(k) { var d = S.log[k]; return d && Array.isArray(d.garden) ? d.garden : []; }
+  function plant(kind, extra) {
+    var d = logDay(workDay(Date.now()));
+    if (!Array.isArray(d.garden)) d.garden = [];
+    var item = { k: kind, at: Date.now() };
+    if (extra) Object.keys(extra).forEach(function (x) { if (extra[x] != null) item[x] = extra[x]; });
+    d.garden.push(item);
+    if (kind !== 'squash') gainXp();
+    return item;
+  }
+  function gainXp() {
+    var before = levelOf(S.xp || 0);
+    S.xp = (S.xp || 0) + 1;
+    var after = levelOf(S.xp);
+    if (after > before) setTimeout(function () { confetti(true); toast('⭐ ' + L('עלית לשלב ', 'Level up: ') + (after + 1) + ' · ' + levelName(after)); }, 2500);
+  }
+  // A big message in the middle of every screen (app), so it is seen over the distracting site.
+  function screenMessage(text, sub, icon, ms) {
+    if (window.focusApp && window.focusApp.screenMessage) window.focusApp.screenMessage({ text: text, sub: sub, icon: icon, ms: ms || 6000 });
+  }
+  function hasWatch() { return !!(window.focusApp && window.focusApp.onWindow && S.distractOn); }
+  function newRound() { S.round = { at: Date.now(), dms: 0, squashed: false, warned: false }; S.pausedAt = 0; }
+  // Share of the round so far not spent on distracting sites (app only).
+  function roundScore() {
+    if (!S.round || !hasWatch()) return null;
+    var el = Math.max(60000, total() - S.remaining);
+    return Math.max(0, Math.min(100, Math.round(100 * (1 - (S.round.dms || 0) / el))));
+  }
+  function splatSound() {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+      if (S.sound === 'none') return;
+      var o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(260, t); o.frequency.exponentialRampToValueAtTime(60, t + 0.35);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2 * S.vol / 100, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.45);
+    } catch (e) {}
+  }
+  function squash(why, name) {
+    if (!S.round || S.round.squashed) return;
+    S.round.squashed = true;
+    plant('squash', { why: why, name: name || null });
+    splatSound();
+    if (why === 'distract') {
+      if (window.focusApp && window.focusApp.throwTomato) window.focusApp.throwTomato();
+      setTimeout(function () { screenMessage(L('העגבנייה נמעכה!', 'Tomato squashed!'), L('יותר מדי זמן ב-', 'Too long on ') + (name || '') + L('. הסבב הזה לא ייספר', '. This round will not count'), 'splat', 7000); }, 900);
+    }
+    toast('💥 ' + (why === 'reset' ? L('העגבנייה נמעכה: הסבב אופס באמצע.', 'Squashed: the round was reset midway.')
+      : why === 'pause' ? L('העגבנייה נמעכה: ההשהיה נמשכה יותר מ-5 דקות.', 'Squashed: the pause went on for more than 5 minutes.')
+      : L('העגבנייה נמעכה: יותר מדי זמן ב-', 'Squashed: too long on ') + (name || '') + '.'));
+    save(); paintAll();
+  }
+
+  // What is in front, reported by the app every few seconds while a round runs.
+  var fgName = '', fgSince = 0, lastGame = 0;
+  function distractName(w) {
+    if (!w) return '';
+    var hay = ((w.title || '') + ' ' + (w.proc || '')).toLowerCase();
+    for (var i = 0; i < S.distractList.length; i++) {
+      var x = S.distractList[i].toLowerCase();
+      if (x && hay.indexOf(x) > -1) return S.distractList[i];
+    }
+    return '';
+  }
+  function onWindow(w) {
+    var n = distractName(w);
+    if (n !== fgName) { fgName = n; fgSince = Date.now(); if (!n && S.round) S.round.warned = false; paintGrowing(); }
+  }
+  function distractedNow() { return hasWatch() && S.mode === 'work' && S.running && !!fgName; }
+  function gameTick() {
+    var now = Date.now(), dt = lastGame ? Math.min(5000, Math.max(0, now - lastGame)) : 0;
+    lastGame = now;
+    if (S.mode === 'work' && !S.running && !S.autoPaused && !S.choosing && S.pausedAt && now - S.pausedAt > PAUSE_SQUASH) {
+      S.pausedAt = 0; squash('pause');
+    }
+    if (distractedNow()) {
+      var d = logDay(workDay(now));
+      if (!d.distract) d.distract = {};
+      d.distract[fgName] = (d.distract[fgName] || 0) + dt;
+      if (S.round && !S.round.squashed) {
+        S.round.dms = (S.round.dms || 0) + dt;
+        if (!S.round.warned && now - fgSince >= DISTRACT_WARN) {
+          S.round.warned = true;
+          toast(L('👀 זה לא נראה כמו עבודה… העגבנייה מתחילה לנבול', "👀 That doesn't look like work… your tomato is wilting"));
+          screenMessage(L('זה לא נראה כמו עבודה…', "That doesn't look like work…"),
+            L('העגבנייה שלך מתחילה לנבול. חזרה לעבודה תציל אותה', 'Your tomato is wilting. Get back to work to save it'), 'wilt', 7000);
+        }
+        if (S.round.dms >= DISTRACT_SQUASH) squash('distract', fgName);
+      }
+    }
+    paintGrowing();
+  }
+
+  // A break really spent away from the screen (app only: it knows when you touch the computer).
+  function breakActivity(idleSec) {
+    var b = S.brkWatch;
+    if (!b || S.mode !== 'break' || !S.running || S.lunch) return;
+    if (idleSec < 3) {
+      b.active = (b.active || 0) + 2000;
+      if (!b.warned && b.active >= BREAK_ACTIVE) {
+        b.warned = true;
+        toast(L('☕ זו הפסקה! קום מהמסך, תתמתח, תשתה מים 🙂', "☕ It's a break! Step away from the screen, stretch, drink some water 🙂"));
+        screenMessage(L('זו הפסקה!', "It's a break!"), L('קום מהמסך, תתמתח, תשתה מים 🙂', 'Step away from the screen, stretch, drink some water 🙂'), 'brk', 7000);
+      }
+    }
+  }
+  function startBreakWatch() { S.brkWatch = window.focusApp && !S.lunch ? { active: 0, warned: false, len: S.curBreak || S.brk * 60000 } : null; }
+  function endBreakWatch() {
+    var b = S.brkWatch; S.brkWatch = null;
+    if (!b || S.lunch || !window.focusApp) return;
+    if ((b.active || 0) < BREAK_ACTIVE) {
+      plant('gold');
+      setTimeout(function () { toast(L('🌟 עגבניית זהב! באמת נחת בהפסקה', '🌟 Golden tomato! You really took a break')); }, 600);
+    }
+  }
+
+  // Days in a row on the daily goal. Friday and Saturday without work do not break it.
+  function streak() {
+    if (!(S.goal > 0)) return 0;
+    var n = 0, d = new Date(Date.now() - DAY_START); d.setHours(12, 0, 0, 0);
+    if (((S.log[keyOf(d)] || {}).rounds || 0) >= S.goal) n++;
+    for (var i = 0; i < 400; i++) {
+      d.setDate(d.getDate() - 1);
+      var r = (S.log[keyOf(d)] || {}).rounds || 0;
+      if (r >= S.goal) n++;
+      else if ((d.getDay() === 5 || d.getDay() === 6) && !r) continue;
+      else break;
+    }
+    return n;
+  }
+
+  var TOMATO_LEAF = '<path d="M32 16 L35.5 22.5 L43 20 L38.5 26 L45 29.5 L36.5 29 L32 34 L27.5 29 L19 29.5 L25.5 26 L21 20 L28.5 22.5 Z" fill="#3E8E41"/><rect x="30.4" y="8" width="3.2" height="9" rx="1.6" fill="#2D6B30"/>';
+  function tomatoSvg(fill) {
+    return '<svg viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="37" rx="25" ry="22" fill="' + fill + '"/><ellipse cx="22" cy="31" rx="6" ry="3.5" transform="rotate(-35 22 31)" fill="#fff" opacity=".38"/>' + TOMATO_LEAF + '</svg>';
+  }
+  var SPLAT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 42 C8 34 18 30 22 34 C22 26 32 24 34 31 C38 25 48 27 46 35 C54 33 58 41 50 45 C56 50 46 56 40 51 C36 57 26 56 26 50 C18 55 8 51 14 46 C8 46 8 43 10 42 Z" fill="#C8321F"/><circle cx="7" cy="34" r="2.5" fill="#C8321F"/><circle cx="57" cy="31" r="2" fill="#C8321F"/><circle cx="50" cy="57" r="2.2" fill="#C8321F"/><path d="M30 38 L33 42 L37 39 L35 44 L39 46 L34 46 L32 50 L30 46 L25 46 L29 43 Z" fill="#3E8E41"/></svg>';
+  function hhmm(ts) { var d = new Date(ts); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  function tomatoEl(it) {
+    var sp = document.createElement('span'); sp.className = 'tom ' + it.k;
+    if (it.k === 'squash') {
+      sp.innerHTML = SPLAT_SVG;
+      sp.title = hhmm(it.at) + ' · ' + (it.why === 'reset' ? L('נמעכה: איפוס באמצע', 'Squashed: reset midway') : it.why === 'pause' ? L('נמעכה: השהיה ארוכה', 'Squashed: long pause') : L('נמעכה: ', 'Squashed: ') + (it.name || L('הסחת דעת', 'distraction')));
+    } else if (it.k === 'gold') {
+      sp.innerHTML = tomatoSvg('#F2B33D');
+      sp.title = hhmm(it.at) + ' · ' + L('עגבניית זהב: הפסקה אמיתית', 'Golden tomato: a real break');
+    } else {
+      sp.innerHTML = tomatoSvg('#E5402B');
+      sp.title = hhmm(it.at) + (it.s != null ? ' · ' + L('ריכוז ', 'focus ') + it.s + '%' : '');
+    }
+    if (Date.now() - it.at < 4000) sp.classList.add('pop');
+    return sp;
+  }
+  // The tomato of the round in progress grows from small and green to big and red.
+  function paintGrowing() {
+    var el = document.getElementById('growing'); if (!el) return;
+    var p = Math.min(1, Math.max(0, 1 - S.remaining / total()));
+    var wilt = distractedNow();
+    var r = Math.round(124 + (229 - 124) * p), g = Math.round(179 + (64 - 179) * p), b = Math.round(66 + (43 - 66) * p);
+    var body = el.querySelector('ellipse'); if (body) body.setAttribute('fill', 'rgb(' + r + ',' + g + ',' + b + ')');
+    var svg = el.querySelector('svg');
+    if (svg) svg.style.transform = 'scale(' + (0.35 + 0.65 * p).toFixed(3) + ')' + (wilt ? ' rotate(28deg)' : '');
+    el.classList.toggle('wilt', wilt);
+    el.title = wilt ? L('העגבנייה נובלת… חזרה לעבודה תציל אותה', 'Your tomato is wilting… get back to work to save it') : L('העגבנייה של הסבב הזה גדלה', "This round's tomato is growing");
+  }
+  function paintGoal() {
+    var gd = $('#garden'), bd = $('#badges'); if (!gd) return;
+    var items = gardenOf(workDay(Date.now())), rounds = roundsToday();
+    gd.textContent = '';
+    items.forEach(function (it) { gd.appendChild(tomatoEl(it)); });
+    if (S.mode === 'work' && S.round && !S.round.squashed) {
+      var gr = document.createElement('span'); gr.className = 'tom grow'; gr.id = 'growing'; gr.innerHTML = tomatoSvg('#7CB342');
+      gd.appendChild(gr);
+    }
+    var okCount = items.filter(function (it) { return it.k === 'ok'; }).length;
+    for (var i = okCount + (S.mode === 'work' && S.round && !S.round.squashed ? 1 : 0); i < (S.goal || 0); i++) {
+      var sl = document.createElement('span'); sl.className = 'tom slot'; gd.appendChild(sl);
+    }
+    if (S.goal > 0) { var c = document.createElement('span'); c.className = 'count'; c.textContent = rounds + '/' + S.goal; gd.appendChild(c); }
+    gd.classList.toggle('reached', S.goal > 0 && rounds >= S.goal);
+    gd.hidden = !gd.children.length;
+    gd.title = L('כל סבב שהושלם מגדל עגבנייה. איפוס באמצע, השהיה של יותר מ-5 דקות או יותר מדי זמן באתר מסיח מועכים אותה. הפסקה אמיתית הרחק מהמסך מביאה עגבניית זהב.',
+      'Every finished round grows a tomato. Resetting midway, pausing for more than 5 minutes or too long on a distracting site squashes it. A real break away from the screen earns a golden tomato.');
+    paintGrowing();
+    if (!bd) return;
+    bd.textContent = '';
+    var st = streak();
+    if (st > 0) {
+      var f = document.createElement('span'); f.className = 'badge fire'; f.textContent = '🔥 ' + st;
+      f.title = L(st + ' ימים ברצף שהגעת ליעד', st + ' days in a row on your goal'); bd.appendChild(f);
+    }
+    var xp = S.xp || 0, lv = levelOf(xp), lo = LEVELS[lv], hi = LEVELS[lv + 1];
+    var lb = document.createElement('span'); lb.className = 'badge';
+    lb.appendChild(document.createTextNode('⭐ ' + (lv + 1) + ' · ' + levelName(lv)));
+    if (hi) { var bar = document.createElement('span'); bar.className = 'xp'; var fill = document.createElement('i'); fill.style.width = Math.round((xp - lo) / (hi - lo) * 100) + '%'; bar.appendChild(fill); lb.appendChild(bar); }
+    lb.title = L('🍅 ' + xp + ' עגבניות עד היום' + (hi ? ' · עוד ' + (hi - xp) + ' לשלב הבא' : ''), '🍅 ' + xp + ' tomatoes so far' + (hi ? ' · ' + (hi - xp) + ' more to the next level' : ''));
+    bd.appendChild(lb);
+    var sc = items.filter(function (it) { return it.k === 'ok' && it.s != null; });
+    if (sc.length) {
+      var avg = Math.round(sc.reduce(function (a, it) { return a + it.s; }, 0) / sc.length);
+      var fb = document.createElement('span'); fb.className = 'badge'; fb.textContent = '🎯 ' + avg + '%';
+      fb.title = L('ריכוז ממוצע בסבבים היום: כמה מהזמן לא היית באתרים מסיחים', 'Average focus today: how much of the time you were not on distracting sites');
+      bd.appendChild(fb);
+    }
   }
 
   /* ---------- tasks ---------- */
@@ -1126,7 +1398,7 @@ table.week td.zero { color: var(--line); }
   function toggleDone(id) {
     var t = byId(id); if (!t) return;
     t.done = !t.done; t.doneAt = t.done ? Date.now() : undefined;
-    if (t.done) { confetti(false); beep(1); }
+    if (t.done) { confetti(false); if (!window.focusApp) beep(1); }
     if (t.done) askTime(t);
     if (S.currentId === id && t.done) {
       var n = firstOpen(); S.currentId = n ? n.id : null;
@@ -1580,7 +1852,7 @@ table.week td.zero { color: var(--line); }
     var worked = S.tasks.some(function (t) { return t.done; }) || S.pomos > 0 || ((S.log[prev] || {}).ms || 0) >= 60000;
     if (worked) fillSummary(prev);
     archiveDone(); S.currentId = null; ensureCurrent(); S.pomos = 0; S.cycles = 0;
-    S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000;
+    S.mode = 'idle'; S.running = false; S.choosing = false; S.remaining = S.work * 60000; S.round = null; S.pausedAt = 0; S.brkWatch = null;
     if (worked) { $('#summary').hidden = false; $('#sumGo').focus(); }
   }
   function closeSummary() { $('#summary').hidden = true; showPendingReport(); }
@@ -1628,10 +1900,10 @@ table.week td.zero { color: var(--line); }
     return d;
   }
   function weekStats(back) {
-    var s = weekStart(back), r = { days: [], ms: 0, rounds: 0, tags: {}, worked: 0, goalDays: 0, best: null, prevMs: 0 }, i, d, x;
+    var s = weekStart(back), r = { days: [], ms: 0, rounds: 0, tags: {}, worked: 0, goalDays: 0, best: null, prevMs: 0, ok: 0, squash: 0, gold: 0, scores: [], distract: {} }, i, d, x;
     for (i = 0; i < 7; i++) {
       d = new Date(s); d.setDate(s.getDate() + i); x = S.log[keyOf(d)] || {};
-      r.days.push({ k: keyOf(d), w: d.getDay(), ms: x.ms || 0, rounds: x.rounds || 0, tags: x.tags || {} });
+      r.days.push({ k: keyOf(d), w: d.getDay(), ms: x.ms || 0, rounds: x.rounds || 0, tags: x.tags || {}, garden: Array.isArray(x.garden) ? x.garden : [], distract: x.distract || {} });
     }
     r.days.forEach(function (d) {
       r.ms += d.ms; r.rounds += d.rounds;
@@ -1639,6 +1911,8 @@ table.week td.zero { color: var(--line); }
       if (S.goal > 0 && d.rounds >= S.goal) r.goalDays++;
       if (d.ms >= 60000 && (!r.best || d.ms > r.best.ms)) r.best = d;
       Object.keys(d.tags).forEach(function (g) { r.tags[g] = (r.tags[g] || 0) + d.tags[g]; });
+      d.garden.forEach(function (it) { if (it.k === 'ok') { r.ok++; if (it.s != null) r.scores.push(it.s); } else if (it.k === 'squash') r.squash++; else if (it.k === 'gold') r.gold++; });
+      Object.keys(d.distract).forEach(function (n) { r.distract[n] = (r.distract[n] || 0) + d.distract[n]; });
     });
     var p = weekStart(back + 1);
     for (i = 0; i < 7; i++) { d = new Date(p); d.setDate(p.getDate() + i); r.prevMs += (S.log[keyOf(d)] || {}).ms || 0; }
@@ -1677,6 +1951,9 @@ table.week td.zero { color: var(--line); }
     txt.push('⏱ ' + L('זמן ריכוז: ', 'Focus time: ') + hm(r.ms), '🍅 ' + L('סבבים: ', 'Rounds: ') + r.rounds, '✅ ' + L('משימות שהושלמו: ', 'Tasks done: ') + r.done.length);
     if (S.goal > 0) txt.push('🎯 ' + L('ימים שהגעת ליעד: ', 'Days you hit the goal: ') + r.goalDays + L(' מתוך ', ' of ') + r.worked + L(' ימי עבודה', ' work days'));
     function line(text, cls) { body.appendChild(el('p', text, cls)); txt.push(text); }
+    if (r.ok || r.squash || r.gold) line('🍅 ' + r.ok + L(' עגבניות', ' tomatoes') + (r.squash ? ' · 💥 ' + r.squash + L(' נמעכו', ' squashed') : '') + (r.gold ? ' · 🌟 ' + r.gold + L(' זהב', ' golden') : ''));
+    if (r.scores.length) line('🎯 ' + L('ריכוז ממוצע בסבב: ', 'Average focus per round: ') + Math.round(r.scores.reduce(function (a, b) { return a + b; }, 0) / r.scores.length) + '%');
+    if (repBack <= 1 && streak() > 0) line('🔥 ' + L('רצף נוכחי: ' + streak() + ' ימים ביעד', 'Current streak: ' + streak() + ' days on goal'));
     if (r.prevMs >= 60000) {
       var pct = Math.round((r.ms - r.prevMs) / r.prevMs * 100);
       line((pct >= 0 ? L('📈 ' + pct + '% יותר מהשבוע שלפניו', '📈 ' + pct + '% more than the week before') : L('📉 ' + (-pct) + '% פחות מהשבוע שלפניו', '📉 ' + (-pct) + '% less than the week before')) + ' (' + hm(r.prevMs) + ')', pct >= 0 ? 'trend-up' : 'trend-down');
@@ -1698,6 +1975,8 @@ table.week td.zero { color: var(--line); }
     bars(L('לפי ימים', 'By day'), r.days.map(function (d) { return [dayName(d.w) + ' ' + shortDate(d.k), d.ms]; }));
     var tags = Object.keys(r.tags).filter(function (g) { return r.tags[g] >= 60000; }).sort(function (a, b) { return r.tags[b] - r.tags[a]; }).slice(0, 6);
     if (tags.length) bars(L('לפי תגיות', 'By tag'), tags.map(function (g) { return [tagLabel(g), r.tags[g], g ? tagColor(S.tagNames[g] || g) : '']; }));
+    var dn = Object.keys(r.distract).filter(function (n) { return r.distract[n] >= 60000; }).sort(function (a, b) { return r.distract[b] - r.distract[a]; }).slice(0, 6);
+    if (dn.length) bars(L('🙈 הסחות דעת בזמן סבבים', '🙈 Distractions during rounds'), dn.map(function (n) { return [n, r.distract[n], '#C62828']; }));
     repText = txt.join('\n');
     $('#report').hidden = false;
   }
@@ -1748,7 +2027,7 @@ table.week td.zero { color: var(--line); }
     else if (c) { cur.appendChild(document.createTextNode(L('עכשיו: ', 'Now: '))); var b = document.createElement('strong'); b.textContent = c.text; cur.appendChild(b); }
     else cur.textContent = S.tasks.length ? L('כל המשימות הושלמו. כל הכבוד!', 'All tasks done. Well done!') : L('הוסיפו משימה כדי להתחיל.', 'Add a task to get started.');
     var sb = $('#startBtn');
-    sb.textContent = S.running ? L('השהה', 'Pause') : (S.mode === 'idle' ? L('התחל זמן עבודה', 'Start focus') : L('המשך', 'Resume'));
+    sb.textContent = S.running ? L('⏸ השהה', '⏸ Pause') : (S.mode === 'idle' ? L('▶ התחל', '▶ Start') : L('▶ המשך', '▶ Resume'));
     sb.onclick = S.running ? pause : start;
     sb.disabled = S.choosing;
     $('#finishBtn').disabled = !c || S.mode === 'break' || S.choosing;
@@ -1827,7 +2106,7 @@ table.week td.zero { color: var(--line); }
     if (!force && now - lastStatusAt < 900) return;
     lastStatusAt = now;
     var c = byId(S.currentId);
-    window.focusApp.setStatus({ mode: S.mode, running: S.running, remaining: S.remaining, total: total(), lunch: !!S.lunch, task: c ? c.text : '', lang: S.lang });
+    window.focusApp.setStatus({ mode: S.mode, running: S.running, remaining: S.remaining, total: total(), lunch: !!S.lunch, task: c ? c.text : '', lang: S.lang, watch: !!S.distractOn, vol: S.sound === 'none' ? 0 : S.vol });
   }
   // Pause as of the moment you left, not the moment it was noticed.
   function awayStart(since) {
@@ -1847,7 +2126,7 @@ table.week td.zero { color: var(--line); }
     S.autoPaused = false;
     if (S.mode !== 'work' || S.running) return;
     if (Date.now() - (S.awayAt || Date.now()) > 30 * 60000) {
-      S.mode = 'idle'; S.running = false; S.remaining = S.work * 60000;
+      S.mode = 'idle'; S.running = false; S.remaining = S.work * 60000; S.round = null;
       save(); paintAll();
       return;
     }
@@ -1858,6 +2137,7 @@ table.week td.zero { color: var(--line); }
     if (d.type === 'lock' || d.type === 'suspend') { screenAway = true; awayStart(d.ts || Date.now()); }
     else if (d.type === 'unlock' || d.type === 'resume') { screenAway = false; awayEnd(); }
     else if (d.type === 'idle') {
+      breakActivity(d.idleSec);
       var th = (S.idleMin == null ? 3 : S.idleMin) * 60;
       if (th > 0 && d.idleSec >= th) awayStart(Date.now() - d.idleSec * 1000);
       else if (d.idleSec < 4 && !screenAway) awayEnd();
@@ -2000,13 +2280,17 @@ table.week td.zero { color: var(--line); }
     else if (c === 'Minus' || c === 'NumpadSubtract') { e.preventDefault(); zoomBy(-0.1); }
     else if (c === 'Digit0' || c === 'Numpad0') { e.preventDefault(); zoomBy(0); }
   });
+  $('#distractOn').onchange = function () { S.distractOn = this.checked; save(); pushStatus(true); paintAll(); };
+  $('#distractIn').onchange = function () {
+    var list = this.value.split(/[,،\n]/).map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 60);
+    S.distractList = list; this.value = list.join(', '); fgName = ''; save();
+  };
   $('#mailIn').onchange = function () {
     var v = this.value.trim();
     S.mail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? v : '';
     this.value = S.mail; save();
   };
 
-  $('#noteBtn').onclick = function () { openQuick(false); };
   $('#quickIn').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); closeQuick(true); }
     else if (e.key === 'Escape') { e.preventDefault(); closeQuick(false); }
@@ -2018,8 +2302,8 @@ table.week td.zero { color: var(--line); }
     S.goal = Math.min(30, Math.max(0, parseInt(this.value, 10) || 0));
     this.value = S.goal; save(); paintAll();
   };
-  $('#soundSel').onchange = function () { S.sound = this.value; save(); beep(2); armEnd(); };
-  $('#volIn').onchange = function () { S.vol = Math.min(100, Math.max(5, +this.value || 70)); save(); beep(2); armEnd(); };
+  $('#soundSel').onchange = function () { S.sound = this.value; save(); beep(2); armEnd(); pushStatus(true); };
+  $('#volIn').onchange = function () { S.vol = Math.min(100, Math.max(5, +this.value || 70)); save(); beep(2); armEnd(); pushStatus(true); };
   $('#soundTest').onclick = function () { beep(3); };
   $('#themeSel').onchange = function () { S.theme = this.value; applyTheme(); save(); };
   $('#langSel').onchange = function () {
@@ -2113,11 +2397,16 @@ table.week td.zero { color: var(--line); }
   addEventListener('beforeunload', function () { if (S.running) tick(); save(); });
 
   load();
+  if (!S.distractList) S.distractList = DEFAULT_DISTRACT.slice();
+  if (S.mode === 'work' && !S.round) { S.round = { at: Date.now(), dms: 0, squashed: false, warned: false }; }
+  // Tomatoes collected before the garden existed count toward the first level.
+  if (S.xp == null) S.xp = Object.keys(S.log).reduce(function (a, k) { return a + ((S.log[k] && S.log[k].rounds) || 0); }, 0);
   ensureCurrent();
   $('#workMin').value = S.work; $('#breakMin').value = S.brk; $('#lunchCustom').value = S.lunchMin || 45;
   $('#sortBy').value = S.sort || 'manual';
   $('#longMin').value = S.longMin; $('#longEvery').value = S.longEvery;
   $('#goalIn').value = S.goal; $('#soundSel').value = S.sound; $('#volIn').value = S.vol; $('#themeSel').value = S.theme; $('#langSel').value = S.lang; $('#mailIn').value = S.mail;
+  $('#distractOn').checked = S.distractOn; $('#distractIn').value = S.distractList.join(', ');
   applyTheme();
   applyZoom();
   translateStatic();
@@ -2132,6 +2421,7 @@ table.week td.zero { color: var(--line); }
     $('#idleLabel').style.display = '';
     $('#idleMin').value = S.idleMin == null ? 3 : S.idleMin;
     window.focusApp.onPresence(onPresence);
+    if (window.focusApp.onWindow) window.focusApp.onWindow(onWindow);
     $('#fileTools').style.display = '';
     Array.prototype.forEach.call(document.querySelectorAll('.app-only'), function (r) { r.style.display = ''; });
     $('#keysWebNote').style.display = 'none';
@@ -2155,6 +2445,7 @@ table.week td.zero { color: var(--line); }
     hb.onmessage = function () { tick(); };
   } catch (e) {}
   setInterval(tick, 250);
+  setInterval(gameTick, 1000);
   dayCheck(); // after the tasks file was read, so its older content does not undo this
   setInterval(dayCheck, 60000);
 })();
