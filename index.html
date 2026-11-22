@@ -234,6 +234,16 @@ table.week td.zero { color: var(--line); }
 .garden .grow svg { transform-origin: 50% 90%; transition: transform .6s linear; }
 .garden .grow.wilt svg { filter: grayscale(.85); }
 .garden .pop { animation: pop .7s ease-out; }
+.badge.info { cursor: pointer; border: 0; font: inherit; font-size: 13px; font-weight: 700; width: 26px; height: 26px; padding: 0; justify-content: center; }
+.badge.info:hover { color: var(--ink); }
+#rulesBody .rule { display: flex; gap: 12px; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid var(--line); }
+#rulesBody .rule:last-child { border-bottom: 0; }
+#rulesBody .ri { font-size: 22px; line-height: 1.2; flex: none; width: 30px; text-align: center; }
+#rulesBody .rt b { display: block; }
+#rulesBody .rt span { color: var(--muted); font-size: 14px; }
+#rulesBody .appnote { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; margin-inline-start: 6px; font-weight: 400; }
+.garden .bonus { display: inline-flex; align-items: center; gap: 2px; margin-inline-start: 10px; padding: 1px 8px 1px 4px; border-radius: 99px; background: rgba(242, 179, 61, .18); font-size: 13px; font-weight: 700; color: #B7791F; }
+.garden .bonus .tom, .garden .bonus .tom svg { width: 22px; height: 22px; }
 .garden .count { font-size: 13px; color: var(--muted); align-self: center; margin-inline-start: 6px; font-variant-numeric: tabular-nums; }
 @keyframes pop { 0% { transform: scale(.2); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .garden .pop { animation: none; } .garden .grow svg { transition: none; } }
@@ -496,6 +506,15 @@ table.week td.zero { color: var(--line); }
     </div>
   </div>
 </div>
+<div class="modal" id="rules" hidden>
+  <div class="box wide" role="dialog" aria-labelledby="rulesTitle">
+    <h2 id="rulesTitle">חוקי המשחק 🍅</h2>
+    <div id="rulesBody"></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn primary" id="rulesClose">הבנתי</button>
+    </div>
+  </div>
+</div>
 <div class="modal" id="awayAsk" hidden>
   <div class="box" role="dialog" aria-labelledby="awayTitle">
     <h2 id="awayTitle">ברוך שובך 👋</h2>
@@ -616,13 +635,13 @@ table.week td.zero { color: var(--line); }
     'הגדלה, הקטנה או גודל רגיל של התצוגה.': 'Make the display larger, smaller, or back to normal.',
     'בוקר טוב! המשימות שהושלמו עברו להיסטוריה ומונה הסבבים התאפס. יום חדש מתחיל כל בוקר ב-4:00.': 'Good morning! Finished tasks moved to history and the round counter was reset. A new day starts every morning at 4:00.',
     'בוא נתחיל': "Let's go", 'כמה זמן זה לקח?': 'How long did it take?', 'או בדקות': 'Or in minutes', 'שמור': 'Save', 'דלג': 'Skip',
-    '✉️ שלח לי ב-Gmail': '✉️ Send to me in Gmail', 'העתק': 'Copy', 'סגור': 'Close', '✓ סיימתי': '✓ Done', 'ברוך שובך 👋': 'Welcome back 👋', 'כן, עבדתי': 'Yes, I was working', 'לא, הייתי בחוץ': 'No, I was away',
+    '✉️ שלח לי ב-Gmail': '✉️ Send to me in Gmail', 'העתק': 'Copy', 'סגור': 'Close', '✓ סיימתי': '✓ Done', 'ברוך שובך 👋': 'Welcome back 👋', 'חוקי המשחק 🍅': 'Game rules 🍅', 'הבנתי': 'Got it', 'כן, עבדתי': 'Yes, I was working', 'לא, הייתי בחוץ': 'No, I was away',
     '🕵️ זיהוי הסחות דעת בזמן סבב': '🕵️ Spot distractions during a round',
     'אתרים ותוכנות מסיחים (מופרדים בפסיק)': 'Distracting sites and programs (comma separated)'
   };
   var origText = new WeakMap(), origAttr = new WeakMap();
   // Parts filled in by code (task names, tags, history...) are never run through EN.
-  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn,#sumTitle,#askTask,#askTomatoes,#repTitle,#repBody,#repPrev,#repNext,#zoomVal,#garden,#badges,#awayText';
+  var DYNAMIC = '#list,#blList,#histList,#weekBox,#sumBody,#appKeys,#toast,#current,#choiceText,#tagTotal,#dueNote,#goal,#keysMsg,#wakeNote,#newTag,#tagFilter,#mode,#digits,#startBtn,#floatBtn,#wakeBtn,#sumTitle,#askTask,#askTomatoes,#repTitle,#repBody,#repPrev,#repNext,#zoomVal,#garden,#badges,#awayText,#rulesBody';
   function isDynamic(el) { return !!(el && el.closest && el.closest(DYNAMIC)); }
   function translateStatic() {
     var en = S.lang === 'en';
@@ -1346,7 +1365,7 @@ table.week td.zero { color: var(--line); }
     var gd = $('#garden'), bd = $('#badges'); if (!gd) return;
     var items = gardenOf(workDay(Date.now())), rounds = roundsToday();
     gd.textContent = '';
-    items.forEach(function (it) { gd.appendChild(tomatoEl(it)); });
+    items.forEach(function (it) { if (it.k !== 'gold') gd.appendChild(tomatoEl(it)); });
     if (S.mode === 'work' && S.round && !S.round.squashed) {
       var gr = document.createElement('span'); gr.className = 'tom grow'; gr.id = 'growing'; gr.innerHTML = tomatoSvg('#7CB342');
       gd.appendChild(gr);
@@ -1356,6 +1375,14 @@ table.week td.zero { color: var(--line); }
       var sl = document.createElement('span'); sl.className = 'tom slot'; gd.appendChild(sl);
     }
     if (S.goal > 0) { var c = document.createElement('span'); c.className = 'count'; c.textContent = rounds + '/' + S.goal; gd.appendChild(c); }
+    var golds = items.filter(function (it) { return it.k === 'gold'; });
+    if (golds.length) {
+      var bo = document.createElement('span'); bo.className = 'bonus';
+      bo.appendChild(tomatoEl(golds[golds.length - 1]));
+      if (golds.length > 1) bo.appendChild(document.createTextNode('×' + golds.length));
+      bo.title = L('בונוס: ' + golds.length + ' עגבניות זהב על הפסקות שבאמת קמת בהן. הן לא נספרות כסבבים.', 'Bonus: ' + golds.length + ' golden tomatoes for breaks you really took. They do not count as rounds.');
+      gd.appendChild(bo);
+    }
     gd.classList.toggle('reached', S.goal > 0 && rounds >= S.goal);
     gd.hidden = !gd.children.length;
     gd.title = L('כל סבב שהושלם מגדל עגבנייה. איפוס באמצע, השהיה של יותר מ-5 דקות או יותר מדי זמן באתר מסיח מועכים אותה. הפסקה אמיתית הרחק מהמסך מביאה עגבניית זהב.',
@@ -1374,6 +1401,9 @@ table.week td.zero { color: var(--line); }
     if (hi) { var bar = document.createElement('span'); bar.className = 'xp'; var fill = document.createElement('i'); fill.style.width = Math.round((xp - lo) / (hi - lo) * 100) + '%'; bar.appendChild(fill); lb.appendChild(bar); }
     lb.title = L('🍅 ' + xp + ' עגבניות עד היום' + (hi ? ' · עוד ' + (hi - xp) + ' לשלב הבא' : ''), '🍅 ' + xp + ' tomatoes so far' + (hi ? ' · ' + (hi - xp) + ' more to the next level' : ''));
     bd.appendChild(lb);
+    var ib = document.createElement('button'); ib.className = 'badge info'; ib.textContent = '?';
+    ib.title = L('חוקי המשחק', 'Game rules'); ib.setAttribute('aria-label', ib.title);
+    ib.onclick = openRules;
     var sc = items.filter(function (it) { return it.k === 'ok' && it.s != null; });
     if (sc.length) {
       var avg = Math.round(sc.reduce(function (a, it) { return a + it.s; }, 0) / sc.length);
@@ -1381,6 +1411,35 @@ table.week td.zero { color: var(--line); }
       fb.title = L('ריכוז ממוצע בסבבים היום: כמה מהזמן לא היית באתרים מסיחים', 'Average focus today: how much of the time you were not on distracting sites');
       bd.appendChild(fb);
     }
+    bd.appendChild(ib);
+  }
+  // The rules of the garden, in short. Rules that need the desktop app are marked on the website.
+  function openRules() {
+    var app = !!window.focusApp, box = $('#rulesBody'), idle = S.idleMin == null ? 3 : S.idleMin;
+    var rows = [
+      ['🍅', L('כל סבב שהושלם מגדל עגבנייה', 'Every finished round grows a tomato'), L('היעד היומי: ' + S.goal + ' עגבניות. העגבנייה של הסבב שרץ עכשיו גדלה מירוקה לאדומה.', 'Daily goal: ' + S.goal + ' tomatoes. The tomato of the round in progress grows from green to red.'), false],
+      ['💥', L('מה מועך עגבנייה', 'What squashes a tomato'), L('איפוס הסבב אחרי הדקה הראשונה, השהיה של יותר מ-5 דקות, או 3 דקות באתרים מסיחים. עגבנייה מעוכה לא נספרת.', 'Resetting the round after its first minute, pausing for more than 5 minutes, or 3 minutes on distracting sites. A squashed tomato does not count.'), false],
+      ['👀', L('אתרים מסיחים', 'Distracting sites'), L('אחרי 20 שניות באתר מהרשימה (בהגדרות) מופיעה אזהרה. הזמן שם לא נספר למשימה.', 'After 20 seconds on a site from the list (in Settings) a warning appears. Time there does not count toward the task.'), true],
+      ['💤', L('לא נגעת במחשב', "You didn't touch the computer"), idle > 0 ? L('אחרי ' + idle + ' דקות בלי מקלדת ועכבר הטיימר עוצר. כשתחזור תישאל אם עבדת, ו"כן" יספור את הזמן.', 'After ' + idle + ' minutes without keyboard or mouse the timer stops. When you come back you are asked if you were working, and "yes" counts the time.') : L('כבוי בהגדרות.', 'Turned off in Settings.'), true],
+      ['🌟', L('עגבניית זהב', 'Golden tomato'), L('בונוס על הפסקה שבאמת קמת בה (פחות מ-40 שניות ליד המחשב). מופיעה בצד ולא נספרת כסבב.', 'A bonus for a break you really took (under 40 seconds at the computer). Shown apart; it is not a round.'), true],
+      ['☕', L('הפסקה היא הפסקה', 'A break is a break'), L('אם ממשיכים לעבוד בהפסקה יותר מ-40 שניות, מופיעה תזכורת לקום מהמסך.', 'Keep working for more than 40 seconds during a break and a reminder tells you to step away.'), true],
+      ['🔥', L('רצף', 'Streak'), L('כמה ימים ברצף הגעת ליעד. שישי ושבת בלי עבודה לא שוברים את הרצף.', 'Days in a row on your goal. Friday and Saturday without work do not break it.'), false],
+      ['⭐', L('שלבים', 'Levels'), L('כל עגבנייה, כולל זהב, היא נקודה. שלבים: ', 'Every tomato, golden ones too, is a point. Levels: ') + LEVELS.map(function (n, i) { return levelName(i) + ' ' + n; }).join(' · '), false],
+      ['🎯', L('ריכוז', 'Focus'), L('כמה מהסבב לא היית באתרים מסיחים. הממוצע של היום מופיע למעלה.', 'How much of the round you were not on distracting sites. Today\'s average is shown at the top.'), true],
+      ['🌅', L('יום חדש', 'New day'), L('מתחיל לבד כל בוקר ב-4:00, עם סיכום של אתמול.', 'Starts by itself every morning at 4:00, with a summary of yesterday.'), false]
+    ];
+    box.textContent = '';
+    rows.forEach(function (r) {
+      var row = document.createElement('div'); row.className = 'rule';
+      var ic = document.createElement('span'); ic.className = 'ri'; ic.textContent = r[0];
+      var tx = document.createElement('div'); tx.className = 'rt';
+      var b = document.createElement('b'); b.textContent = r[1];
+      if (r[3] && !app) { var an = document.createElement('span'); an.className = 'appnote'; an.textContent = L('באפליקציה בלבד', 'App only'); b.appendChild(an); }
+      var sp = document.createElement('span'); sp.textContent = r[2];
+      tx.appendChild(b); tx.appendChild(sp); row.appendChild(ic); row.appendChild(tx); box.appendChild(row);
+    });
+    $('#rules').hidden = false;
+    $('#rulesClose').focus();
   }
 
   /* ---------- tasks ---------- */
@@ -1855,6 +1914,13 @@ table.week td.zero { color: var(--line); }
       body.appendChild(ul2);
     }
     if (!done.length && !keys.length) { var e = document.createElement('p'); e.className = 'note'; e.textContent = L('לא נרשמה עבודה ביום הזה.', 'No work was recorded that day.'); body.appendChild(e); }
+    var gd0 = gardenOf(prev), gn = gd0.filter(function (it) { return it.k === 'gold'; }).length, sq = gd0.filter(function (it) { return it.k === 'squash'; }).length;
+    if (gn || sq) {
+      var bp = document.createElement('p'); bp.className = 'note';
+      bp.textContent = (gn ? '🌟 ' + L('בונוס: ' + gn + ' עגבניות זהב על הפסקות אמיתיות (לא נספרות כסבבים)', 'Bonus: ' + gn + ' golden tomatoes for real breaks (not counted as rounds)') : '') +
+        (gn && sq ? ' · ' : '') + (sq ? '💥 ' + L(sq + ' סבבים נמעכו ולא נספרו', sq + ' squashed rounds, not counted') : '');
+      body.appendChild(bp);
+    }
   }
   // The day turned: summary of the day that ended, then finished tasks go to history
   // and the round counter starts again.
@@ -2300,6 +2366,9 @@ table.week td.zero { color: var(--line); }
   $('#askMin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('#askSave').click(); });
   $('#askTime').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAsk(); });
   $('#askTime').addEventListener('click', function (e) { if (e.target === this) closeAsk(); });
+  $('#rulesClose').onclick = function () { $('#rules').hidden = true; };
+  $('#rules').addEventListener('keydown', function (e) { if (e.key === 'Escape') this.hidden = true; });
+  $('#rules').addEventListener('click', function (e) { if (e.target === this) this.hidden = true; });
   $('#awayYes').onclick = function () { answerAway(true); };
   $('#awayNo').onclick = function () { answerAway(false); };
   $('#awayAsk').addEventListener('keydown', function (e) { if (e.key === 'Escape') answerAway(false); });
